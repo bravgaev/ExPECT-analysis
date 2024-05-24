@@ -196,6 +196,7 @@ The same approach is used for the presymptomatic cohort. This time DMR's are cal
 
 ```{r}
 #| label: prep_presympt
+#| output: false
 
 #Prepare a dataset containing symptomatic samples
 
@@ -260,7 +261,12 @@ test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions
 
 Three types of classical machine learning classifiers are tested on the dataset. A random forest classifier, support vector machine and a logistic regression model. Each model type is trained on the training set of each cohort and then tested on their respective test sets as well as the entire other cohort, e.g: a random forest classifier is trained on the training set of the symptomatic cohort, the obtained model is tested on the testing set of the symptomatic cohort as well as on the full presymtomatic cohort.
 
+In the following section the terms "Diagnostic" and "Predictive" model are used for models trained on symptomatic and pre-symptomatic data respectively. In ROC plots the green curve shows testing results on the testing set from the same cohort as the training data (intended use) while the orange curve shows results from testing with the other cohort.
+
 ## Random forest classifiers
+
+A random forest classifier from the `ranger` package is built. Hyperparameter training is first performed on the number of trees, number of randomly selected predictors and the minimal node size.
+More info on random forest classifiers can be found on [Wikipedia](https://en.wikipedia.org/wiki/Random_forest).
 
 ::: panel-tabset
 
@@ -308,6 +314,9 @@ plot_roc(sympt_final_rf_fit$.predictions[[1]], "Category", ".pred_Control",
 
 ```
 
+The best performing random forest model has the following parameters `r kable(select(sympt_best_rf, -.config))`
+
+
 ### Predictive model
 
 ```{r}
@@ -338,10 +347,13 @@ plot_roc(presympt_final_rf_fit$.predictions[[1]], "Category", ".pred_Control",
          sympt_rf_predictions, "Truth", ".pred_Control")
 ```
 
-
+The best performing random forest model has the following parameters `r kable(select(presympt_best_rf, -.config))`
 :::
 
 ## Support vector machine
+
+For the support vector machine, the `kernlab`package is used set to classification mode. The only hyperparameter that is tuned is the __cost__ parameter.
+More info on support vector machines can be read [here](https://en.wikipedia.org/wiki/Support_vector_machine)
 
 ::: panel-tabset
 
@@ -386,6 +398,8 @@ plot_roc(sympt_final_svm_fit$.predictions[[1]], "Category", ".pred_Control",
 
 ```
 
+The best performing support vector machine has the following parameters `r kable(select(sympt_best_svm, -.config))`
+
 ### Predictive model
 
 ```{r}
@@ -414,9 +428,14 @@ plot_roc(presympt_final_svm_fit$.predictions[[1]], "Category", ".pred_Control",
          sympt_svm_predictions, "Truth", ".pred_Control")
 ```
 
+The best performing support vector machine has the following parameters `r kable(select(presympt_best_svm, -.config))`
+
 :::
 
 ## Regression model
+
+A logistic regression model is created with an elastic regularisation. The model family is set to binomial and the `glmnet` package is used for modelling. Both the model penalty and regularisation mixture are tuned during hyperparameter tuning.
+More about regression [here](https://en.wikipedia.org/wiki/Logistic_regression)
 
 ::: panel-tabset
 
@@ -462,6 +481,8 @@ plot_roc(sympt_final_reg_fit$.predictions[[1]], "Category", ".pred_Control",
 
 ```
 
+The best performing regression model has the following parameters `r kable(select(sympt_best_reg, -.config))`
+
 ### Predictive model
 
 ```{r}
@@ -490,3 +511,5 @@ plot_roc(presympt_final_reg_fit$.predictions[[1]], "Category", ".pred_Control",
          sympt_reg_predictions, "Truth", ".pred_Control")
 ```
 
+The best performing regression model has the following parameters `r kable(select(presympt_best_reg, -.config))`
+:::
