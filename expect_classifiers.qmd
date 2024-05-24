@@ -1,0 +1,492 @@
+---
+title: "The Early Prediction of prEgnancy Complications Testing or ExPECT study"
+subtitle: "Machine learning classification"
+author: "Bram Van Gaever"
+
+output-dir: quarto_output
+format: html
+code-fold: true
+warning: false
+message: false
+
+toc: true
+toc-expand: 2
+toc-location: left
+
+
+---
+
+# Introduction
+
+This notebook contains the code for the creation of the machine learning classifiers of the ExPECT study. The code is kept separate mainly for readability and to keep the code in check. 
+
+
+```{r}
+#| label: "libs_and_utils"
+#| output: false
+# Chunck containing the used libraries, colors and some utility functions 
+
+set.seed(2341)
+
+library(readxl)
+library(limma)
+library(bsseq)
+library(RColorBrewer)
+library(Rtsne)
+library(pheatmap)
+library(GenomicRanges)
+library(biomaRt)
+library(HDF5Array)
+library(kableExtra)
+library(patchwork)
+library(ggrepel)
+library(ggbeeswarm)
+library(seqsetvis)
+library(biomaRt)
+library(fuzzyjoin)
+library(ggpubr)
+library(tidyverse)
+library(tidymodels)
+
+
+#Plotting colors
+Green <- "#00A08A"
+Orange <- "#F98300"
+Blue <-  "#5BBCD6"
+Purple <- "#BF8AC2"
+Brown <- "#B86D33"
+Orange2 <-  "#CC9F68"
+Green2 <- "#7BB6AE"
+Blue2 <- "#00778A"
+Purple2 <- "#741078"
+
+color_palette <- c(Green, Orange, Blue, Purple, Brown, Green2, Purple2, Blue2, Orange2)
+gradient <- colorRampPalette(c(Blue, "#FFFFFF", Purple))(1000)
+
+#"not in" operator
+`%nin%` = Negate(`%in%`)
+
+#Ranges to id funtction
+ranges2id <- function(genomicRanges) {
+    idVector <- c(paste0(genomicRanges@seqnames, ":", genomicRanges@ranges@start, "-", genomicRanges@ranges@start + genomicRanges@ranges@width - 1))
+}
+#Id to ranges function
+id2ranges <- function(idVector) {
+    idTib <- as_tibble(idVector) %>% 
+               separate(value, into = c("seqnames", "start", "end"), sep = "[:-]", convert = T)
+        
+    genomicRanges <- GRanges(seqnames =idTib$seqnames, ranges = IRanges(start = idTib$start, end = idTib$end))
+}
+
+#Limma model fitting and result gathering fucntion 
+train_limma <- function(matrix, design) {
+    limma_fit = lmFit(matrix, design = design)
+    eB_fit = eBayes(limma_fit)
+    categories <- colnames(design)[-1]
+    results = list()
+    for (category in categories) {
+        top = topTable(eB_fit, coef = category, p.value = 0.01, 
+                       number = Inf, adjust.method = "BH")
+        results[[category]] = top
+        
+    }
+    return(results)
+}
+
+plot_roc <-  function(fit_prediction, fit_truth, fit_control, test_predictions, test_truth, test_control) {
+    fit_auc <- roc_auc(fit_prediction, fit_truth, fit_control)
+    test_auc <- roc_auc(test_predictions, test_truth, test_control)
+    
+    fit_roc <- roc_curve(fit_prediction, fit_truth, fit_control)
+    test_roc <- roc_curve(test_predictions, test_truth, test_control)
+    
+    ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = fit_roc, color = color_palette[1], size = 1.5) +
+    geom_path(data = test_roc, color = color_palette[2], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.30, y = 0.80, label = paste0("AUC:", round(fit_auc$.estimate, 4))), color = color_palette[1], size = 4) +
+    geom_text(aes(x = 0.80, y = 0.30, label = paste0("AUC:", round(test_auc$.estimate, 4))), color = color_palette[2], size = 4) +
+    coord_equal() +
+    theme_classic()
+}
+
+``` 
+
+# Data loading and prepping 
+
+Data is loaded in the same manner as for the exploratory analysis. However this time, additional splits are made. The symptomatic and pre-symptomatic data sets are divided into a training and test set (each containing an equal proportion of cases and control samples). The training set is used for DMR identification and model training while the test sets are used for model validation.
+
+
+```{r}
+#| label: data_loading 
+setwd("~/Drive/ExPECT paper Symptomatic analysis/Code/Git_repo")
+#Load bsseq object
+bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/")
+
+#Load clustered methylation data
+clusters_expect <- readRDS("Data/Methylation/clusters_expect.Rds")
+
+#Load study annotation
+annotation <-  read_csv("Data/expect_annotation.csv")
+long_samples <- read_table("Data/longitudinal_samples.txt")
+
+
+#Split up annotations for ease of use
+
+long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)
+presympt_annotation <- annotation %>% filter(Group == "Pre-symptomatic") 
+sympt_annotation <- annotation %>% filter(Group == "Symptomatic") %>% 
+                                filter(Sample_id %nin% long_annotation$Sample_id)
+
+#Split up clusters for ease of use
+clusters_presympt <- clusters_expect %>% select(all_of(presympt_annotation$Sample_id))
+clusters_sympt <- clusters_expect %>%  select(all_of(sympt_annotation$Sample_id))
+```
+
+The symptomatic set is first divided after which DMR's are recalculated using limma on the samples included in the training set alone. A set of 25 DMR's is then selected for further modelling to limit overfitting of the models. However, because our cohort is fairly limited, some overfitting is impossible to prevent.
+
+```{r}
+#| label: prep_sympt 
+
+#Prepare a dataset containing symptomatic samples
+model_meth_sympt <-  clusters_sympt %>% 
+  t(.) %>%
+  as_tibble(.) %>% 
+  bind_cols(dplyr::select(sympt_annotation, Category, Sample_id)) %>%  
+  mutate(Category = as.factor(Category)) %>% 
+  relocate(Category) 
+  
+#Create a training and test set
+sympt_data_split <- initial_split(model_meth_sympt, strata = Category)
+sympt_train <- training(sympt_data_split)
+sympt_test<- testing(sympt_data_split)
+
+#Recalculate DMRs on the test set
+sympt_train_dmr <- clusters_expect[, sympt_train$Sample_id]
+train_annot <- annotation[annotation$Sample_id %in% sympt_train$Sample_id,] %>% arrange(match(Sample_id, colnames(sympt_train_dmr)))
+sympt_train_dmr_design <-  model.matrix(~Category + Batch + Sex, train_annot)
+
+dmr_sympt_train <- train_limma(sympt_train_dmr, sympt_train_dmr_design)
+sympt_model_clusters <- rownames(dmr_sympt_train$CategoryPE)
+
+#Subset the training and testing set
+model_meth_sympt_subset <- dplyr::select(model_meth_sympt, Category, sympt_model_clusters[1:25])
+sympt_data_split_subset <- initial_split(dplyr::select(model_meth_sympt, Category, sympt_model_clusters[1:25]), strata = Category)
+sympt_train <- training(sympt_data_split_subset)
+sympt_test<- testing(sympt_data_split_subset)
+
+#Set validation folds
+sympt_folds <- vfold_cv(sympt_train, v = 5, strata = Category)
+sympt_loo_folds <- vfold_cv(sympt_train, v = nrow(sympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
+
+#Set metric types to be collected
+cls_metrics <- metric_set(sensitivity, specificity, accuracy)
+
+#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
+test_set_presympt <- clusters_presympt[sympt_model_clusters[1:25],] %>% 
+  t(.) %>%
+  as_tibble(.) %>% 
+  bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
+  mutate(Category = as.factor(Category)) %>% 
+  relocate(Category) 
+
+```
+
+The same approach is used for the presymptomatic cohort. This time DMR's are calculated with the `DMRfinder` package instead. Again the top 25 most significant DMR's are used for model creation
+
+```{r}
+#| label: prep_presympt
+
+#Prepare a dataset containing symptomatic samples
+
+bs_presympt <- bs_expect[,presympt_annotation$Sample_id]
+
+pData(bs_presympt) <- pData(bs_presympt) %>% as_tibble(rownames = NA) %>% 
+    rownames_to_column(var = "Sample_id") %>% 
+    left_join(presympt_annotation)
+rownames(pData(bs_presympt)) <- bs_presympt$Sample_id
+
+
+cov_presympt <- getCoverage(bs_presympt, type = "Cov", what = "perBase")
+keep <- which(rowSums(cov_presympt[,bs_presympt$Category == "Control"] >= 2) >= 2 &
+                rowSums(cov_presympt[,bs_presympt$Category == "PE"] >= 2) >= 2)
+bs_presympt_filtered <- bs_presympt[keep,]
+          
+#Create a training and test set
+presympt_data_split <- initial_split(presympt_annotation, strata = Category)
+presympt_train <- training(presympt_data_split)
+presympt_test<- testing(presympt_data_split)
+
+#Calculate DMRs on the training set
+pe_ids <- presympt_train[presympt_train$Category == "PE",]$Sample_id
+control_ids <- presympt_train[presympt_train$Category == "Control",]$Sample_id
+
+presympt_t_stat <- BSmooth.tstat(bs_presympt_filtered, 
+                                 group1 = pe_ids,
+                                 group2 = control_ids,
+                                 estimate.var = "group2",
+                                 local.correct = T,
+                                 verbose = T)
+dmr_presympt_finder_train <- dmrFinder(presympt_t_stat, qcutoff = c(0.01, 0.99))
+dmr_presympt_finder_train_filtered <- subset(dmr_presympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
+
+#Get methylation values for the testing an training set
+model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+    t(.) %>%
+    as_tibble(.) %>% 
+    bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
+    mutate(Category = as.factor(Category)) %>% 
+    relocate(Category) 
+presympt_data_split <- initial_split(model_meth_presympt, strata = "Category")
+presympt_train <- training(presympt_data_split)
+presympt_test <- testing(presympt_data_split)
+
+#Set validation folds
+presympt_folds <- vfold_cv(presympt_train, v = 5, strata = Category)
+presympt_loo_folds <- vfold_cv(presympt_train, v = nrow(presympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
+
+#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
+bs_sympt <- bs_expect[,sympt_annotation$Sample_id]
+
+test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+  t(.) %>%
+  as_tibble(.) %>% 
+  bind_cols(dplyr::select(sympt_annotation, Category)) %>%  
+  mutate(Category = as.factor(Category)) %>% 
+  relocate(Category) 
+```
+
+# Machine learning
+
+Three types of classical machine learning classifiers are tested on the dataset. A random forest classifier, support vector machine and a logistic regression model. Each model type is trained on the training set of each cohort and then tested on their respective test sets as well as the entire other cohort, e.g: a random forest classifier is trained on the training set of the symptomatic cohort, the obtained model is tested on the testing set of the symptomatic cohort as well as on the full presymtomatic cohort.
+
+## Random forest classifiers
+
+::: panel-tabset
+
+### Diagnostic model
+
+```{r}
+#| label: sympt_rf
+
+#make a rf model
+rf_mod <- rand_forest(trees = tune(), mtry = tune(), min_n = tune()) %>% 
+  set_engine("ranger") %>% 
+  set_mode("classification")
+
+#make a workflow for resampling
+rf_wf <- workflow() %>% 
+  add_model(rf_mod) %>% 
+  add_formula(Category ~ .)
+
+#Make a grid for a parameter search
+rf_grid <- grid_regular(trees(), finalize(mtry(), x = sympt_folds), min_n(), levels = 5)
+
+#fit the resamplings
+sympt_rf_tune <- rf_wf %>% 
+  tune_grid(resamples = sympt_folds, grid = rf_grid)
+
+#get the best model
+sympt_best_rf <- sympt_rf_tune %>% 
+  select_best(metric = "accuracy")
+
+#make the final fit and evaluate the test set
+sympt_final_rf_wf <- rf_wf %>% 
+  finalize_workflow(sympt_best_rf)
+
+sympt_final_rf_fit <- sympt_final_rf_wf %>% 
+  last_fit(sympt_data_split_subset)
+
+#Test the model on the pre-symptomatic data
+
+sympt_rf_fit <- sympt_final_rf_wf %>% fit(model_meth_sympt_subset)
+presympt_rf_predictions <- predict(sympt_rf_fit, test_set_presympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_presympt$Category)
+
+plot_roc(sympt_final_rf_fit$.predictions[[1]], "Category", ".pred_Control",
+         presympt_rf_predictions, "Truth", ".pred_Control")
+
+```
+
+### Predictive model
+
+```{r}
+#| label: presympt_rf
+
+#fit the pre symptomatic resamplings
+presympt_rf_tune <- rf_wf %>% 
+  tune_grid(resamples = presympt_folds, grid = rf_grid)
+
+#get the best model
+presympt_best_rf <- presympt_rf_tune %>% 
+  select_best(metric = "accuracy")
+
+#make the final fit and evaluate the test set
+presympt_final_rf_wf <- rf_wf %>% 
+  finalize_workflow(presympt_best_rf)
+
+presympt_final_rf_fit <- sympt_final_rf_wf %>% 
+  last_fit(presympt_data_split)
+
+#Test the model on the symptomatic data
+
+presympt_rf_fit <- presympt_final_rf_wf %>% fit(model_meth_presympt)
+sympt_rf_predictions <- predict(presympt_rf_fit, test_set_sympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_sympt$Category)
+
+plot_roc(presympt_final_rf_fit$.predictions[[1]], "Category", ".pred_Control",
+         sympt_rf_predictions, "Truth", ".pred_Control")
+```
+
+
+:::
+
+## Support vector machine
+
+::: panel-tabset
+
+### Diagnostic model
+
+```{r}
+#| label: sympt_svm
+
+#Make an svm model
+svm_mod <- svm_linear(cost = tune()) %>% 
+  set_engine("kernlab") %>% 
+  set_mode("classification")
+
+#Make a workflow
+svm_wf <- workflow() %>% 
+  add_model(svm_mod) %>% 
+  add_formula(Category ~ .)
+
+#Make a parameter grid
+svm_grid <- grid_regular(cost(), levels = 5)
+
+#Fit the resamples and do a grid search for symptomatic samples
+svm_tune <- svm_wf %>% 
+  tune_grid(resamples = sympt_folds, grid = svm_grid, metrics =  cls_metrics)
+
+best_svm <- svm_tune %>% 
+  select_best(metric = "accuracy")
+
+sympt_final_svm_wf <- svm_wf %>% 
+  finalize_workflow(best_svm)
+  
+sympt_final_svm_fit <- sympt_final_svm_wf %>% 
+  last_fit(sympt_data_split_subset)
+
+#Test the model on the pre-symptomatic data
+sympt_svm_fit <- sympt_final_svm_wf %>% fit(model_meth_sympt_subset)
+presympt_svm_predictions <- predict(sympt_svm_fit, test_set_presympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_presympt$Category)
+
+plot_roc(sympt_final_svm_fit$.predictions[[1]], "Category", ".pred_Control",
+         presympt_svm_predictions, "Truth", ".pred_Control")
+
+```
+
+### Predictive model
+
+```{r}
+#| label: presympt_svm
+
+#Fit the resamples and do a grid search for symptomatic samples
+presympt_svm_tune <- svm_wf %>% 
+  tune_grid(resamples = presympt_folds, grid = svm_grid, metrics =  cls_metrics)
+
+presympt_best_svm <- svm_tune %>% 
+  select_best(metric = "accuracy")
+
+presympt_final_svm_wf <- svm_wf %>% 
+  finalize_workflow(presympt_best_svm)
+  
+presympt_final_svm_fit <- presympt_final_svm_wf %>% 
+  last_fit(presympt_data_split)
+
+#Test the model on the symptomatic data
+
+presympt_svm_fit <- presympt_final_svm_wf %>% fit(model_meth_presympt)
+sympt_svm_predictions <- predict(presympt_svm_fit, test_set_sympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_sympt$Category)
+
+plot_roc(presympt_final_svm_fit$.predictions[[1]], "Category", ".pred_Control",
+         sympt_svm_predictions, "Truth", ".pred_Control")
+```
+
+:::
+
+## Regression model
+
+::: panel-tabset
+
+### Diagnostic model
+
+```{r}
+#| label: sympt_reg
+
+#Make an elestic net reggression model
+reg_mod <- logistic_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet", family = "binomial") %>%
+  set_mode("classification")
+
+#Make workflow
+reg_wf <- workflow() %>%
+  add_model(reg_mod) %>%
+  add_formula(Category ~ .)
+
+#Make a parameter grid
+reg_grid <- grid_regular(penalty(), mixture(), levels = 5)
+
+#Tune the model
+sympt_reg_tune <- reg_wf %>%
+  tune_grid(resamples = sympt_folds, grid = reg_grid, metrics = cls_metrics)
+
+sympt_best_reg <- sympt_reg_tune %>%
+  select_best(metric = "accuracy")
+
+sympt_final_reg_wf <- reg_wf %>%
+  finalize_workflow(sympt_best_reg)
+
+sympt_final_reg_fit <- sympt_final_reg_wf %>%   
+  last_fit(sympt_data_split_subset)
+
+#Test the model on the pre-symptomatic data
+
+sympt_reg_fit <- sympt_final_reg_wf %>% fit(model_meth_sympt_subset)
+presympt_reg_predictions <- predict(sympt_reg_fit, test_set_presympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_presympt$Category)
+
+plot_roc(sympt_final_reg_fit$.predictions[[1]], "Category", ".pred_Control",
+         presympt_reg_predictions, "Truth", ".pred_Control")
+
+```
+
+### Predictive model
+
+```{r}
+#| label: presympt_reg
+
+#Tune the model
+presympt_reg_tune <- reg_wf %>%
+  tune_grid(resamples = presympt_folds, grid = reg_grid, metrics = cls_metrics)
+
+presympt_best_reg <- presympt_reg_tune %>%
+  select_best(metric = "accuracy")
+
+presympt_final_reg_wf <- reg_wf %>%
+  finalize_workflow(sympt_best_reg)
+
+presympt_final_reg_fit <- presympt_final_reg_wf %>%   
+  last_fit(presympt_data_split)
+
+#Test the model on the pre-symptomatic data
+
+presympt_reg_fit <- presympt_final_reg_wf %>% fit(model_meth_presympt)
+sympt_reg_predictions <- predict(presympt_reg_fit, test_set_sympt, type ="prob") %>% 
+    bind_cols(Truth = test_set_sympt$Category)
+
+plot_roc(presympt_final_reg_fit$.predictions[[1]], "Category", ".pred_Control",
+         sympt_reg_predictions, "Truth", ".pred_Control")
+```
+
