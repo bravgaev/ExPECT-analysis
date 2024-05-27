@@ -390,7 +390,7 @@ svm_grid <- grid_regular(cost(), levels = 5)
 svm_tune <- svm_wf %>% 
   tune_grid(resamples = sympt_folds, grid = svm_grid, metrics =  cls_metrics)
 
-best_svm <- svm_tune %>% 
+sympt_best_svm <- svm_tune %>% 
   select_best(metric = "accuracy")
 
 sympt_final_svm_wf <- svm_wf %>% 
