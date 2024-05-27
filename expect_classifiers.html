@@ -152,11 +152,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#random-forest-classifiers" id="toc-random-forest-classifiers" class="nav-link" data-scroll-target="#random-forest-classifiers">Random forest classifiers</a></li>
   <li><a href="#support-vector-machine" id="toc-support-vector-machine" class="nav-link" data-scroll-target="#support-vector-machine">Support vector machine</a></li>
-  <li><a href="#regression-model" id="toc-regression-model" class="nav-link" data-scroll-target="#regression-model">Regression model</a>
-  <ul class="collapse">
-  <li><a href="#diagnostic-model-2" id="toc-diagnostic-model-2" class="nav-link" data-scroll-target="#diagnostic-model-2">Diagnostic model</a></li>
-  <li><a href="#predictive-model-2" id="toc-predictive-model-2" class="nav-link" data-scroll-target="#predictive-model-2">Predictive model</a></li>
-  </ul></li>
+  <li><a href="#regression-model" id="toc-regression-model" class="nav-link" data-scroll-target="#regression-model">Regression model</a></li>
   </ul></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/bravgaev/ExPECT-analysis/edit/main/expect_classifiers.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/bravgaev/ExPECT-analysis/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -354,15 +350,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>sympt_loo_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(sympt_train, <span class="at">v =</span> <span class="fu">nrow</span>(sympt_train)) <span class="co">#using a workaround here to get loocv as it's not really supported by tidymodels</span></span>
 <span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="co">#Set metric types to be collected</span></span>
-<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>cls_metrics <span class="ot">&lt;-</span> <span class="fu">metric_set</span>(sensitivity, specificity, accuracy)</span>
-<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a><span class="co">#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model</span></span>
-<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>test_set_presympt <span class="ot">&lt;-</span> clusters_presympt[sympt_model_clusters[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>],] <span class="sc">%&gt;%</span> </span>
-<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
-<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
-<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(presympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
-<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
-<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">relocate</span>(Category) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>sensPE <span class="ot">&lt;-</span> <span class="fu">metric_tweak</span>(<span class="st">"sensPE"</span>, sensitivity, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>specPE <span class="ot">&lt;-</span> <span class="fu">metric_tweak</span>(<span class="st">"specPE"</span>, specificity, <span class="at">event_level =</span> <span class="st">"second"</span>)</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>cls_metrics <span class="ot">&lt;-</span> <span class="fu">metric_set</span>(sensPE, specPE, accuracy)</span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="co">#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model</span></span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>test_set_presympt <span class="ot">&lt;-</span> clusters_presympt[sympt_model_clusters[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>],] <span class="sc">%&gt;%</span> </span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(presympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">relocate</span>(Category) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <p>The same approach is used for the presymptomatic cohort. This time DMR’s are calculated with the <code>DMRfinder</code> package instead. Again the top 25 most significant DMR’s are used for model creation</p>
@@ -398,56 +396,44 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">group2 =</span> control_ids,</span>
 <span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">estimate.var =</span> <span class="st">"group2"</span>,</span>
 <span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">local.correct =</span> T,</span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">verbose =</span> T)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</details>
-<div class="cell-output cell-output-stdout">
-<pre><code>[BSmooth.tstat] preprocessing ... done in 1.2 sec
-[BSmooth.tstat] computing stats within groups ... done in 34.4 sec
-[BSmooth.tstat] computing stats across groups ... done in 49.9 sec</code></pre>
-</div>
-<details class="code-fold">
-<summary>Code</summary>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>dmr_presympt_finder_train <span class="ot">&lt;-</span> <span class="fu">dmrFinder</span>(presympt_t_stat, <span class="at">qcutoff =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.99</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</details>
-<div class="cell-output cell-output-stdout">
-<pre><code>[dmrFinder] creating dmr data.frame</code></pre>
-</div>
-<details class="code-fold">
-<summary>Code</summary>
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>dmr_presympt_finder_train_filtered <span class="ot">&lt;-</span> <span class="fu">subset</span>(dmr_presympt_finder_train, n <span class="sc">&gt;=</span> <span class="dv">3</span> <span class="sc">&amp;</span> <span class="fu">abs</span>(meanDiff) <span class="sc">&gt;=</span> <span class="fl">0.1</span>)</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">#Get methylation values for the testing an training set</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>model_meth_presympt <span class="ot">&lt;-</span> <span class="fu">getMeth</span>(bs_presympt_filtered, <span class="at">what =</span> <span class="st">"perRegion"</span>, <span class="at">type =</span> <span class="st">"smooth"</span>, <span class="at">regions =</span> dmr_presympt_finder_train_filtered[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>,]) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(presympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">relocate</span>(Category) </span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>presympt_data_split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(model_meth_presympt, <span class="at">strata =</span> <span class="st">"Category"</span>)</span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>presympt_train <span class="ot">&lt;-</span> <span class="fu">training</span>(presympt_data_split)</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>presympt_test <span class="ot">&lt;-</span> <span class="fu">testing</span>(presympt_data_split)</span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Set validation folds</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>presympt_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(presympt_train, <span class="at">v =</span> <span class="dv">5</span>, <span class="at">strata =</span> Category)</span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>presympt_loo_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(presympt_train, <span class="at">v =</span> <span class="fu">nrow</span>(presympt_train)) <span class="co">#using a workaround here to get loocv as it's not really supported by tidymodels</span></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="co">#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model</span></span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>bs_sympt <span class="ot">&lt;-</span> bs_expect[,sympt_annotation<span class="sc">$</span>Sample_id]</span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>test_set_sympt <span class="ot">&lt;-</span> <span class="fu">getMeth</span>(bs_sympt, <span class="at">type =</span> <span class="st">"smooth"</span>, <span class="at">what =</span> <span class="st">"perRegion"</span>, <span class="at">regions =</span> dmr_presympt_finder_train_filtered[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>,]) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(sympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">relocate</span>(Category) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">verbose =</span> T)</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>dmr_presympt_finder_train <span class="ot">&lt;-</span> <span class="fu">dmrFinder</span>(presympt_t_stat, <span class="at">qcutoff =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.99</span>))</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>dmr_presympt_finder_train_filtered <span class="ot">&lt;-</span> <span class="fu">subset</span>(dmr_presympt_finder_train, n <span class="sc">&gt;=</span> <span class="dv">3</span> <span class="sc">&amp;</span> <span class="fu">abs</span>(meanDiff) <span class="sc">&gt;=</span> <span class="fl">0.1</span>)</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="co">#Get methylation values for the testing an training set</span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>model_meth_presympt <span class="ot">&lt;-</span> <span class="fu">getMeth</span>(bs_presympt_filtered, <span class="at">what =</span> <span class="st">"perRegion"</span>, <span class="at">type =</span> <span class="st">"smooth"</span>, <span class="at">regions =</span> dmr_presympt_finder_train_filtered[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>,]) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(presympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">relocate</span>(Category) </span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>presympt_data_split <span class="ot">&lt;-</span> <span class="fu">initial_split</span>(model_meth_presympt, <span class="at">strata =</span> <span class="st">"Category"</span>)</span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>presympt_train <span class="ot">&lt;-</span> <span class="fu">training</span>(presympt_data_split)</span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>presympt_test <span class="ot">&lt;-</span> <span class="fu">testing</span>(presympt_data_split)</span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a><span class="co">#Set validation folds</span></span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>presympt_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(presympt_train, <span class="at">v =</span> <span class="dv">5</span>, <span class="at">strata =</span> Category)</span>
+<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a>presympt_loo_folds <span class="ot">&lt;-</span> <span class="fu">vfold_cv</span>(presympt_train, <span class="at">v =</span> <span class="fu">nrow</span>(presympt_train)) <span class="co">#using a workaround here to get loocv as it's not really supported by tidymodels</span></span>
+<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a><span class="co">#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model</span></span>
+<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a>bs_sympt <span class="ot">&lt;-</span> bs_expect[,sympt_annotation<span class="sc">$</span>Sample_id]</span>
+<span id="cb4-51"><a href="#cb4-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-52"><a href="#cb4-52" aria-hidden="true" tabindex="-1"></a>test_set_sympt <span class="ot">&lt;-</span> <span class="fu">getMeth</span>(bs_sympt, <span class="at">type =</span> <span class="st">"smooth"</span>, <span class="at">what =</span> <span class="st">"perRegion"</span>, <span class="at">regions =</span> dmr_presympt_finder_train_filtered[<span class="dv">1</span><span class="sc">:</span><span class="dv">25</span>,]) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-53"><a href="#cb4-53" aria-hidden="true" tabindex="-1"></a>  <span class="fu">t</span>(.) <span class="sc">%&gt;%</span></span>
+<span id="cb4-54"><a href="#cb4-54" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>(.) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-55"><a href="#cb4-55" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_cols</span>(dplyr<span class="sc">::</span><span class="fu">select</span>(sympt_annotation, Category)) <span class="sc">%&gt;%</span>  </span>
+<span id="cb4-56"><a href="#cb4-56" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Category =</span> <span class="fu">as.factor</span>(Category)) <span class="sc">%&gt;%</span> </span>
+<span id="cb4-57"><a href="#cb4-57" aria-hidden="true" tabindex="-1"></a>  <span class="fu">relocate</span>(Category) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 </section>
 <section id="machine-learning" class="level1">
 <h1>Machine learning</h1>
 <p>Three types of classical machine learning classifiers are tested on the dataset. A random forest classifier, support vector machine and a logistic regression model. Each model type is trained on the training set of each cohort and then tested on their respective test sets as well as the entire other cohort, e.g: a random forest classifier is trained on the training set of the symptomatic cohort, the obtained model is tested on the testing set of the symptomatic cohort as well as on the full presymtomatic cohort.</p>
+<p>In the following section the terms “Diagnostic” and “Predictive” model are used for models trained on symptomatic and pre-symptomatic data respectively. In ROC plots the green curve shows testing results on the testing set from the same cohort as the training data (intended use) while the orange curve shows results from testing with the other cohort.</p>
 <section id="random-forest-classifiers" class="level2">
 <h2 class="anchored" data-anchor-id="random-forest-classifiers">Random forest classifiers</h2>
+<p>A random forest classifier from the <code>ranger</code> package is built. Hyperparameter training is first performed on the number of trees, number of randomly selected predictors and the minimal node size. More info on random forest classifiers can be found on <a href="https://en.wikipedia.org/wiki/Random_forest">Wikipedia</a>.</p>
 <div class="tabset-margin-container"></div><div class="panel-tabset">
 <ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true">Diagnostic model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false">Predictive model</a></li></ul>
 <div class="tab-content">
@@ -455,42 +441,47 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">#make a rf model</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>rf_mod <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="fu">tune</span>(), <span class="at">mtry =</span> <span class="fu">tune</span>(), <span class="at">min_n =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span> </span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">#make a workflow for resampling</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>rf_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(rf_mod) <span class="sc">%&gt;%</span> </span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .)</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a grid for a parameter search</span></span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>rf_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">trees</span>(), <span class="fu">finalize</span>(<span class="fu">mtry</span>(), <span class="at">x =</span> sympt_folds), <span class="fu">min_n</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co">#fit the resamplings</span></span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>sympt_rf_tune <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> rf_grid)</span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="co">#get the best model</span></span>
-<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>sympt_best_rf <span class="ot">&lt;-</span> sympt_rf_tune <span class="sc">%&gt;%</span> </span>
-<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="co">#make the final fit and evaluate the test set</span></span>
-<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>sympt_final_rf_wf <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_rf)</span>
-<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>sympt_final_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
-<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
-<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>sympt_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span>
-<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>presympt_rf_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_rf_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
-<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_rf_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>         presympt_rf_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">#make a rf model</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>rf_mod <span class="ot">&lt;-</span> <span class="fu">rand_forest</span>(<span class="at">trees =</span> <span class="fu">tune</span>(), <span class="at">mtry =</span> <span class="fu">tune</span>(), <span class="at">min_n =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"ranger"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#make a workflow for resampling</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>rf_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(rf_mod) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .) </span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a grid for a parameter search</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>rf_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">trees</span>(), <span class="fu">finalize</span>(<span class="fu">mtry</span>(), <span class="at">x =</span> sympt_folds), <span class="fu">min_n</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="co">#fit the resamplings</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>sympt_rf_tune <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> rf_grid)</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="co">#get the best model</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>sympt_best_rf <span class="ot">&lt;-</span> sympt_rf_tune <span class="sc">%&gt;%</span> </span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="co">#make the final fit and evaluate the test set</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>sympt_final_rf_wf <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_rf)</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>sympt_final_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>sympt_rf_metrics <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>sympt_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>presympt_rf_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_rf_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
+<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_rf_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a>         presympt_rf_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -500,34 +491,55 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+<p>The best performing random forest model has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">mtry</th>
+<th style="text-align: right;">trees</th>
+<th style="text-align: right;">min_n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">2</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">#fit the pre symptomatic resamplings</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>presympt_rf_tune <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> rf_grid)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="co">#get the best model</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>presympt_best_rf <span class="ot">&lt;-</span> presympt_rf_tune <span class="sc">%&gt;%</span> </span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co">#make the final fit and evaluate the test set</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>presympt_final_rf_wf <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(presympt_best_rf)</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>presympt_final_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the symptomatic data</span></span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>presympt_rf_fit <span class="ot">&lt;-</span> presympt_final_rf_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>sympt_rf_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_rf_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_rf_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>         sympt_rf_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">#fit the pre symptomatic resamplings</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>presympt_rf_tune <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> rf_grid)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="co">#get the best model</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>presympt_best_rf <span class="ot">&lt;-</span> presympt_rf_tune <span class="sc">%&gt;%</span> </span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co">#make the final fit and evaluate the test set</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>presympt_final_rf_wf <span class="ot">&lt;-</span> rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(presympt_best_rf)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>presympt_final_rf_fit <span class="ot">&lt;-</span> sympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>presympt_rf_metrics <span class="ot">&lt;-</span> presympt_final_rf_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the symptomatic data</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>presympt_rf_fit <span class="ot">&lt;-</span> presympt_final_rf_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>sympt_rf_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_rf_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_rf_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>         sympt_rf_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -537,12 +549,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+<p>The best performing random forest model has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">mtry</th>
+<th style="text-align: right;">trees</th>
+<th style="text-align: right;">min_n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">2</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 </div>
 </section>
 <section id="support-vector-machine" class="level2">
 <h2 class="anchored" data-anchor-id="support-vector-machine">Support vector machine</h2>
+<p>For the support vector machine, the <code>kernlab</code>package is used set to classification mode. The only hyperparameter that is tuned is the <strong>cost</strong> parameter. More info on support vector machines can be read <a href="https://en.wikipedia.org/wiki/Support_vector_machine">here</a></p>
 <div class="tabset-margin-container"></div><div class="panel-tabset">
 <ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-2-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-1" role="tab" aria-controls="tabset-2-1" aria-selected="true">Diagnostic model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-2-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-2-2" role="tab" aria-controls="tabset-2-2" aria-selected="false">Predictive model</a></li></ul>
 <div class="tab-content">
@@ -550,45 +580,49 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Make an svm model</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>svm_mod <span class="ot">&lt;-</span> <span class="fu">svm_linear</span>(<span class="at">cost =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span> </span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"kernlab"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a workflow</span></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>svm_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(svm_mod) <span class="sc">%&gt;%</span> </span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .)</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a parameter grid</span></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>svm_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">cost</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Fit the resamples and do a grid search for symptomatic samples</span></span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>svm_tune <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> svm_grid, <span class="at">metrics =</span>  cls_metrics)</span>
-<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>best_svm <span class="ot">&lt;-</span> svm_tune <span class="sc">%&gt;%</span> </span>
-<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>sympt_final_svm_wf <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(best_svm)</span>
-<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>sympt_final_svm_fit <span class="ot">&lt;-</span> sympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
-<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
-<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>sympt_svm_fit <span class="ot">&lt;-</span> sympt_final_svm_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Make an svm model</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>svm_mod <span class="ot">&lt;-</span> <span class="fu">svm_linear</span>(<span class="at">cost =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"kernlab"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a workflow</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>svm_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(svm_mod) <span class="sc">%&gt;%</span> </span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a parameter grid</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>svm_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">cost</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Fit the resamples and do a grid search for symptomatic samples</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>svm_tune <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> svm_grid, <span class="at">metrics =</span>  cls_metrics)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>sympt_best_svm <span class="ot">&lt;-</span> svm_tune <span class="sc">%&gt;%</span> </span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>sympt_final_svm_wf <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_svm)</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>sympt_final_svm_fit <span class="ot">&lt;-</span> sympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>sympt_svm_metrics <span class="ot">&lt;-</span> sympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>sympt_svm_fit <span class="ot">&lt;-</span> sympt_final_svm_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code> Setting default kernel parameters  </code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>presympt_svm_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_svm_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_svm_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>         presympt_svm_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>presympt_svm_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_svm_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_svm_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>         presympt_svm_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -598,38 +632,55 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+<p>The best performing support vector machine has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">cost</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.013139</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div id="tabset-2-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-2-2-tab">
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Fit the resamples and do a grid search for symptomatic samples</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>presympt_svm_tune <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> svm_grid, <span class="at">metrics =</span>  cls_metrics)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>presympt_best_svm <span class="ot">&lt;-</span> svm_tune <span class="sc">%&gt;%</span> </span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>presympt_final_svm_wf <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(presympt_best_svm)</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>presympt_final_svm_fit <span class="ot">&lt;-</span> presympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the symptomatic data</span></span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>presympt_svm_fit <span class="ot">&lt;-</span> presympt_final_svm_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Fit the resamples and do a grid search for symptomatic samples</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>presympt_svm_tune <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> svm_grid, <span class="at">metrics =</span>  cls_metrics)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>presympt_best_svm <span class="ot">&lt;-</span> svm_tune <span class="sc">%&gt;%</span> </span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>presympt_final_svm_wf <span class="ot">&lt;-</span> svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(presympt_best_svm)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>presympt_final_svm_fit <span class="ot">&lt;-</span> presympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>presympt_svm_metrics <span class="ot">&lt;-</span> presympt_final_svm_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the symptomatic data</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>presympt_svm_fit <span class="ot">&lt;-</span> presympt_final_svm_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
 <pre><code> Setting default kernel parameters  </code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>sympt_svm_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_svm_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_svm_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>         sympt_svm_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>sympt_svm_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_svm_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_svm_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>         sympt_svm_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -639,52 +690,71 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+<p>The best performing support vector machine has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">cost</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.013139</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 </div>
 </section>
 <section id="regression-model" class="level2">
 <h2 class="anchored" data-anchor-id="regression-model">Regression model</h2>
-<p>::: panel-tabset</p>
-<section id="diagnostic-model-2" class="level3">
-<h3 class="anchored" data-anchor-id="diagnostic-model-2">Diagnostic model</h3>
+<p>A logistic regression model is created with an elastic regularisation. The model family is set to binomial and the <code>glmnet</code> package is used for modelling. Both the model penalty and regularisation mixture are tuned during hyperparameter tuning. More about regression <a href="https://en.wikipedia.org/wiki/Logistic_regression">here</a></p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-3-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-1" role="tab" aria-controls="tabset-3-1" aria-selected="true">Diagnostic model</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-3-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-3-2" role="tab" aria-controls="tabset-3-2" aria-selected="false">Predictive model</a></li></ul>
+<div class="tab-content">
+<div id="tabset-3-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-3-1-tab">
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Make an elestic net reggression model</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>reg_mod <span class="ot">&lt;-</span> <span class="fu">logistic_reg</span>(<span class="at">penalty =</span> <span class="fu">tune</span>(), <span class="at">mixture =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"glmnet"</span>, <span class="at">family =</span> <span class="st">"binomial"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="co">#Make workflow</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>reg_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(reg_mod) <span class="sc">%&gt;%</span></span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .)</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a parameter grid</span></span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>reg_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">penalty</span>(), <span class="fu">mixture</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Tune the model</span></span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>sympt_reg_tune <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> reg_grid, <span class="at">metrics =</span> cls_metrics)</span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>sympt_best_reg <span class="ot">&lt;-</span> sympt_reg_tune <span class="sc">%&gt;%</span></span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>sympt_final_reg_wf <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
-<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_reg)</span>
-<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>sympt_final_reg_fit <span class="ot">&lt;-</span> sympt_final_reg_wf <span class="sc">%&gt;%</span>   </span>
-<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
-<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
-<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>sympt_reg_fit <span class="ot">&lt;-</span> sympt_final_reg_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span>
-<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>presympt_reg_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_reg_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
-<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_reg_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>         presympt_reg_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Make an elestic net reggression model</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>reg_mod <span class="ot">&lt;-</span> <span class="fu">logistic_reg</span>(<span class="at">penalty =</span> <span class="fu">tune</span>(), <span class="at">mixture =</span> <span class="fu">tune</span>()) <span class="sc">%&gt;%</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_engine</span>(<span class="st">"glmnet"</span>, <span class="at">family =</span> <span class="st">"binomial"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set_mode</span>(<span class="st">"classification"</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co">#Make workflow</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>reg_wf <span class="ot">&lt;-</span> <span class="fu">workflow</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_model</span>(reg_mod) <span class="sc">%&gt;%</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_formula</span>(Category <span class="sc">~</span> .)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co">#Make a parameter grid</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>reg_grid <span class="ot">&lt;-</span> <span class="fu">grid_regular</span>(<span class="fu">penalty</span>(), <span class="fu">mixture</span>(), <span class="at">levels =</span> <span class="dv">5</span>)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Tune the model</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>sympt_reg_tune <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> sympt_folds, <span class="at">grid =</span> reg_grid, <span class="at">metrics =</span> cls_metrics)</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>sympt_best_reg <span class="ot">&lt;-</span> sympt_reg_tune <span class="sc">%&gt;%</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>sympt_final_reg_wf <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_reg)</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>sympt_final_reg_fit <span class="ot">&lt;-</span> sympt_final_reg_wf <span class="sc">%&gt;%</span>   </span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset)</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>sympt_reg_metrics <span class="ot">&lt;-</span> sympt_final_reg_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(sympt_data_split_subset, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>sympt_reg_fit <span class="ot">&lt;-</span> sympt_final_reg_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_sympt_subset)</span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a>presympt_reg_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(sympt_reg_fit, test_set_presympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_presympt<span class="sc">$</span>Category)</span>
+<span id="cb13-36"><a href="#cb13-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-37"><a href="#cb13-37" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(sympt_final_reg_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb13-38"><a href="#cb13-38" aria-hidden="true" tabindex="-1"></a>         presympt_reg_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -694,33 +764,51 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-</section>
-<section id="predictive-model-2" class="level3">
-<h3 class="anchored" data-anchor-id="predictive-model-2">Predictive model</h3>
+<p>The best performing regression model has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">penalty</th>
+<th style="text-align: right;">mixture</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="tabset-3-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-3-2-tab">
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Tune the model</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>presympt_reg_tune <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> reg_grid, <span class="at">metrics =</span> cls_metrics)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>presympt_best_reg <span class="ot">&lt;-</span> presympt_reg_tune <span class="sc">%&gt;%</span></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>presympt_final_reg_wf <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_reg)</span>
-<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>presympt_final_reg_fit <span class="ot">&lt;-</span> presympt_final_reg_wf <span class="sc">%&gt;%</span>   </span>
-<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
-<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
-<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>presympt_reg_fit <span class="ot">&lt;-</span> presympt_final_reg_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span>
-<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>sympt_reg_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_reg_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
-<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
-<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_reg_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
-<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>         sympt_reg_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Tune the model</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>presympt_reg_tune <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tune_grid</span>(<span class="at">resamples =</span> presympt_folds, <span class="at">grid =</span> reg_grid, <span class="at">metrics =</span> cls_metrics)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>presympt_best_reg <span class="ot">&lt;-</span> presympt_reg_tune <span class="sc">%&gt;%</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select_best</span>(<span class="at">metric =</span> <span class="st">"accuracy"</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>presympt_final_reg_wf <span class="ot">&lt;-</span> reg_wf <span class="sc">%&gt;%</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">finalize_workflow</span>(sympt_best_reg)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>presympt_final_reg_fit <span class="ot">&lt;-</span> presympt_final_reg_wf <span class="sc">%&gt;%</span>   </span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="co">#Get metrics </span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>presympt_reg_metrics <span class="ot">&lt;-</span> presympt_final_reg_wf <span class="sc">%&gt;%</span> </span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">last_fit</span>(presympt_data_split, <span class="at">metrics =</span> cls_metrics) <span class="sc">%&gt;%</span> <span class="fu">collect_metrics</span>()</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="co">#Test the model on the pre-symptomatic data</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>presympt_reg_fit <span class="ot">&lt;-</span> presympt_final_reg_wf <span class="sc">%&gt;%</span> <span class="fu">fit</span>(model_meth_presympt)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>sympt_reg_predictions <span class="ot">&lt;-</span> <span class="fu">predict</span>(presympt_reg_fit, test_set_sympt, <span class="at">type =</span><span class="st">"prob"</span>) <span class="sc">%&gt;%</span> </span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_cols</span>(<span class="at">Truth =</span> test_set_sympt<span class="sc">$</span>Category)</span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_roc</span>(presympt_final_reg_fit<span class="sc">$</span>.predictions[[<span class="dv">1</span>]], <span class="st">"Category"</span>, <span class="st">".pred_Control"</span>,</span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>         sympt_reg_predictions, <span class="st">"Truth"</span>, <span class="st">".pred_Control"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -730,9 +818,100 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+<p>The best performing regression model has the following parameters</p>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: right;">penalty</th>
+<th style="text-align: right;">mixture</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<p>The following table contains specificity and sensitivity metrics for each of the create models (tested on their respective test set). Most models overclassify samples as controls, symptomatic models are more powerful at differentiating then pre-symptomatic models</p>
+<div id="tbl-metrics" class="cell anchored">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>total_metrics <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">Model =</span> <span class="fu">c</span>(<span class="st">"Random forest"</span>, <span class="st">"Random forest"</span>, <span class="st">"Support Vector Machine"</span>, <span class="st">"Support Vector Machine"</span>, <span class="st">"Logistic regression"</span>, <span class="st">"Logistic regression"</span> ),</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>                        <span class="at">Dataset =</span> <span class="fu">c</span>(<span class="st">"Symptomatic"</span>, <span class="st">"Pre-symptomatic"</span>,<span class="st">"Symptomatic"</span>, <span class="st">"Pre-symptomatic"</span>,<span class="st">"Symptomatic"</span>, <span class="st">"Pre-symptomatic"</span>),</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>                        <span class="at">Sensitivity =</span> <span class="fu">c</span>(</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>                            sympt_rf_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>],</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>                            presympt_rf_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>],</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>                            sympt_svm_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>],</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>                            presympt_svm_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>],</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>                            sympt_reg_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>],</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>                            presympt_reg_metrics<span class="sc">$</span>.estimate[<span class="dv">1</span>]</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>                        ),</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>                        <span class="at">Specificity =</span> <span class="fu">c</span>(sympt_rf_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>],</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>                            presympt_rf_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>],</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>                            sympt_svm_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>],</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>                            presympt_svm_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>],</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>                            sympt_reg_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>],</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>                            presympt_reg_metrics<span class="sc">$</span>.estimate[<span class="dv">2</span>]))</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(total_metrics)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Model</th>
+<th style="text-align: left;">Dataset</th>
+<th style="text-align: right;">Sensitivity</th>
+<th style="text-align: right;">Specificity</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Random forest</td>
+<td style="text-align: left;">Symptomatic</td>
+<td style="text-align: right;">0.7142857</td>
+<td style="text-align: right;">1.0000000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Random forest</td>
+<td style="text-align: left;">Pre-symptomatic</td>
+<td style="text-align: right;">0.2857143</td>
+<td style="text-align: right;">1.0000000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Support Vector Machine</td>
+<td style="text-align: left;">Symptomatic</td>
+<td style="text-align: right;">0.7142857</td>
+<td style="text-align: right;">1.0000000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Support Vector Machine</td>
+<td style="text-align: left;">Pre-symptomatic</td>
+<td style="text-align: right;">0.2857143</td>
+<td style="text-align: right;">1.0000000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Logistic regression</td>
+<td style="text-align: left;">Symptomatic</td>
+<td style="text-align: right;">0.7142857</td>
+<td style="text-align: right;">0.9230769</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Logistic regression</td>
+<td style="text-align: left;">Pre-symptomatic</td>
+<td style="text-align: right;">0.4285714</td>
+<td style="text-align: right;">1.0000000</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 
 
-</section>
 </section>
 </section>
 

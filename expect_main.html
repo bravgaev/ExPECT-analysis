@@ -6405,7 +6405,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">left_join</span>(presympt_annotation) </span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">#Compare the means of this group with a Wilcox Rank Sum test   </span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>sympt_test <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mean_meth_presympt<span class="sc">$</span>value[mean_meth_presympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"PE"</span>], mean_meth_presympt<span class="sc">$</span>value[mean_meth_presympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"Control"</span>], <span class="at">conf.int =</span> T)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>presympt_mean_test <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mean_meth_presympt<span class="sc">$</span>value[mean_meth_presympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"PE"</span>], mean_meth_presympt<span class="sc">$</span>value[mean_meth_presympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"Control"</span>], <span class="at">conf.int =</span> T)</span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co">#Compute mean methylation data for the Symptomatic group    </span></span>
 <span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>mean_meth_sympt <span class="ot">&lt;-</span> <span class="fu">apply</span>(clusters_sympt, <span class="dv">2</span>, mean) <span class="sc">%&gt;%</span> </span>
@@ -6415,7 +6415,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Group =</span> <span class="st">"Symptomatic"</span>)</span>
 <span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="co">#Compare the means of this group with a Wilcox Rank Sum test </span></span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>presympt_test <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mean_meth_sympt<span class="sc">$</span>value[mean_meth_sympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"PE"</span>], mean_meth_sympt<span class="sc">$</span>value[mean_meth_sympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"Control"</span>], <span class="at">conf.int =</span> T)</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>sympt_mean_test <span class="ot">&lt;-</span> <span class="fu">wilcox.test</span>(mean_meth_sympt<span class="sc">$</span>value[mean_meth_sympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"PE"</span>], mean_meth_sympt<span class="sc">$</span>value[mean_meth_sympt<span class="sc">$</span>Category <span class="sc">==</span> <span class="st">"Control"</span>], <span class="at">conf.int =</span> T)</span>
 <span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="co">#Combine both tibbles for plotting an overview</span></span>
 <span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>mean_meth_combined <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(mean_meth_presympt, mean_meth_sympt) <span class="sc">%&gt;%</span> </span>
@@ -6481,9 +6481,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>p_dmr500_cluster_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(clusters_sympt[dmrs_sympt_limma,][<span class="dv">1</span><span class="sc">:</span><span class="dv">500</span>,]), sympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_sympt500" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_sympt500-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_sympt500-1.png" id="fig-heatmap_sympt500" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_sympt500-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1
+</figcaption>
 </figure>
 </div>
 </div>
@@ -6496,9 +6501,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>p_dmr250_cluster_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(clusters_sympt[dmrs_sympt_limma,][<span class="dv">1</span><span class="sc">:</span><span class="dv">250</span>,]), sympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_sympt250" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_sympt250-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_sympt250-1.png" id="fig-heatmap_sympt250" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_sympt250-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2
+</figcaption>
 </figure>
 </div>
 </div>
@@ -6511,9 +6521,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>p_dmr100_cluster_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(clusters_sympt[dmrs_sympt_limma,][<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>,]), sympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_sympt100" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_sympt100-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_sympt100-1.png" id="fig-heatmap_sympt100" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_sympt100-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3
+</figcaption>
 </figure>
 </div>
 </div>
@@ -6575,9 +6590,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>p_dmrfinder500_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(heatmap_data_finder[<span class="dv">1</span><span class="sc">:</span><span class="dv">500</span>,]), presympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_presympt500" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_presympt500-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_presympt500-1.png" id="fig-heatmap_presympt500" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_presympt500-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4
+</figcaption>
 </figure>
 </div>
 </div>
@@ -6590,9 +6610,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>p_dmrfinder250_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(heatmap_data_finder[<span class="dv">1</span><span class="sc">:</span><span class="dv">250</span>,]), presympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_presympt250" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_presympt250-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_presympt250-1.png" id="fig-heatmap_presympt250" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_presympt250-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5
+</figcaption>
 </figure>
 </div>
 </div>
@@ -6605,9 +6630,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>p_dmrfinder100_heatmap <span class="ot">&lt;-</span> <span class="fu">meth_heatmap</span>(<span class="fu">t</span>(heatmap_data_finder[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>,]), presympt_heatmap_annot)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid figure-img" width="672"></p>
+<div id="fig-heatmap_presympt100" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap_presympt100-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="expect_main_files/figure-html/fig-heatmap_presympt100-1.png" id="fig-heatmap_presympt100" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap_presympt100-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6
+</figcaption>
 </figure>
 </div>
 </div>
@@ -7452,7 +7482,7 @@ Table&nbsp;1: Top GO terms in the overlapping DMR’s
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="expect_main_files/figure-html/unnamed-chunk-23-1.png" class="img-fluid figure-img" width="672"></p>
+<p><img src="expect_main_files/figure-html/label - long_dmr_clustering_presympt-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
 </div>
 </div>
@@ -7487,7 +7517,7 @@ Table&nbsp;1: Top GO terms in the overlapping DMR’s
 </section>
 <section id="more" class="level1">
 <h1>More</h1>
-<p>The code for the machine learning part of the paper can be found <a href="./expect_classifiers.html">here</a></p>
+<p>The code for the machine learning part of the paper can be found <a href="./expect_classifiers.html">here</a> or use the navigation at the top of this page.</p>
 
 
 </section>
