@@ -394,7 +394,7 @@ sympt_best_svm <- svm_tune %>%
   select_best(metric = "accuracy")
 
 sympt_final_svm_wf <- svm_wf %>% 
-  finalize_workflow(best_svm)
+  finalize_workflow(sympt_best_svm)
   
 sympt_final_svm_fit <- sympt_final_svm_wf %>% 
   last_fit(sympt_data_split_subset)
