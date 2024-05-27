@@ -180,7 +180,9 @@ sympt_folds <- vfold_cv(sympt_train, v = 5, strata = Category)
 sympt_loo_folds <- vfold_cv(sympt_train, v = nrow(sympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
 
 #Set metric types to be collected
-cls_metrics <- metric_set(sensitivity, specificity, accuracy)
+sensPE <- metric_tweak("sensPE", sensitivity, event_level = "second")
+specPE <- metric_tweak("specPE", specificity, event_level = "second")
+cls_metrics <- metric_set(sensPE, specPE, accuracy)
 
 #Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
 test_set_presympt <- clusters_presympt[sympt_model_clusters[1:25],] %>% 
@@ -279,11 +281,12 @@ More info on random forest classifiers can be found on [Wikipedia](https://en.wi
 rf_mod <- rand_forest(trees = tune(), mtry = tune(), min_n = tune()) %>% 
   set_engine("ranger") %>% 
   set_mode("classification")
+    
 
 #make a workflow for resampling
 rf_wf <- workflow() %>% 
   add_model(rf_mod) %>% 
-  add_formula(Category ~ .)
+  add_formula(Category ~ .) 
 
 #Make a grid for a parameter search
 rf_grid <- grid_regular(trees(), finalize(mtry(), x = sympt_folds), min_n(), levels = 5)
@@ -302,6 +305,10 @@ sympt_final_rf_wf <- rf_wf %>%
 
 sympt_final_rf_fit <- sympt_final_rf_wf %>% 
   last_fit(sympt_data_split_subset)
+
+#Get metrics 
+sympt_rf_metrics <- sympt_final_rf_wf %>% 
+  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the pre-symptomatic data
 
@@ -336,6 +343,10 @@ presympt_final_rf_wf <- rf_wf %>%
 
 presympt_final_rf_fit <- sympt_final_rf_wf %>% 
   last_fit(presympt_data_split)
+
+#Get metrics 
+presympt_rf_metrics <- presympt_final_rf_wf %>% 
+  last_fit(presympt_data_split, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the symptomatic data
 
@@ -388,6 +399,10 @@ sympt_final_svm_wf <- svm_wf %>%
 sympt_final_svm_fit <- sympt_final_svm_wf %>% 
   last_fit(sympt_data_split_subset)
 
+#Get metrics 
+sympt_svm_metrics <- sympt_final_svm_wf %>% 
+  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
+
 #Test the model on the pre-symptomatic data
 sympt_svm_fit <- sympt_final_svm_wf %>% fit(model_meth_sympt_subset)
 presympt_svm_predictions <- predict(sympt_svm_fit, test_set_presympt, type ="prob") %>% 
@@ -417,6 +432,10 @@ presympt_final_svm_wf <- svm_wf %>%
   
 presympt_final_svm_fit <- presympt_final_svm_wf %>% 
   last_fit(presympt_data_split)
+
+#Get metrics 
+presympt_svm_metrics <- presympt_final_svm_wf %>% 
+  last_fit(presympt_data_split, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the symptomatic data
 
@@ -470,6 +489,10 @@ sympt_final_reg_wf <- reg_wf %>%
 sympt_final_reg_fit <- sympt_final_reg_wf %>%   
   last_fit(sympt_data_split_subset)
 
+#Get metrics 
+sympt_reg_metrics <- sympt_final_reg_wf %>% 
+  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
+
 #Test the model on the pre-symptomatic data
 
 sympt_reg_fit <- sympt_final_reg_wf %>% fit(model_meth_sympt_subset)
@@ -501,6 +524,10 @@ presympt_final_reg_wf <- reg_wf %>%
 presympt_final_reg_fit <- presympt_final_reg_wf %>%   
   last_fit(presympt_data_split)
 
+#Get metrics 
+presympt_reg_metrics <- presympt_final_reg_wf %>% 
+  last_fit(presympt_data_split, metrics = cls_metrics) %>% collect_metrics()
+
 #Test the model on the pre-symptomatic data
 
 presympt_reg_fit <- presympt_final_reg_wf %>% fit(model_meth_presympt)
@@ -513,3 +540,124 @@ plot_roc(presympt_final_reg_fit$.predictions[[1]], "Category", ".pred_Control",
 
 The best performing regression model has the following parameters `r kable(select(presympt_best_reg, -.config))`
 :::
+
+The following table contains specificity and sensitivity metrics for each of the create models (tested on their respective test set). Most models overclassify samples as controls, symptomatic models are more powerful at differentiating then pre-symptomatic models
+
+```{r}
+#| label: tbl-metrics
+
+total_metrics <- tibble(Model = c("Random forest", "Random forest", "Support Vector Machine", "Support Vector Machine", "Logistic regression", "Logistic regression" ),
+                        Dataset = c("Symptomatic", "Pre-symptomatic","Symptomatic", "Pre-symptomatic","Symptomatic", "Pre-symptomatic"),
+                        Sensitivity = c(
+                            sympt_rf_metrics$.estimate[1],
+                            presympt_rf_metrics$.estimate[1],
+                            sympt_svm_metrics$.estimate[1],
+                            presympt_svm_metrics$.estimate[1],
+                            sympt_reg_metrics$.estimate[1],
+                            presympt_reg_metrics$.estimate[1]
+                        ),
+                        Specificity = c(sympt_rf_metrics$.estimate[2],
+                            presympt_rf_metrics$.estimate[2],
+                            sympt_svm_metrics$.estimate[2],
+                            presympt_svm_metrics$.estimate[2],
+                            sympt_reg_metrics$.estimate[2],
+                            presympt_reg_metrics$.estimate[2]))
+
+kable(total_metrics)
+```
+
+
+```{r}
+#| include: false
+#| label: fig-roc_paper
+
+#Make combined roc curve plots
+
+#Symptomatic models
+
+roc_reg_symp_train <- roc_curve(sympt_final_reg_fit$.predictions[[1]], Category, .pred_Control)  
+auc_reg_symp_train <- roc_auc(sympt_final_reg_fit$.predictions[[1]], Category, .pred_Control)  
+roc_svm_symp_train <- roc_curve(sympt_final_svm_fit$.predictions[[1]], Category, .pred_Control)  
+auc_svm_symp_train <- roc_auc(sympt_final_svm_fit$.predictions[[1]], Category, .pred_Control)  
+roc_rf_symp_train <- roc_curve(sympt_final_rf_fit$.predictions[[1]], Category, .pred_Control)  
+auc_rf_symp_train <- roc_auc(sympt_final_rf_fit$.predictions[[1]], Category, .pred_Control)  
+
+#Symptomatic models predicting presympt
+
+roc_reg_symp_pred <- roc_curve(presympt_reg_predictions, Truth, .pred_Control)  
+auc_reg_symp_pred <- roc_auc(presympt_reg_predictions, Truth, .pred_Control)  
+roc_svm_symp_pred <- roc_curve(presympt_svm_predictions, Truth, .pred_Control)  
+auc_svm_symp_pred <- roc_auc(presympt_svm_predictions, Truth, .pred_Control)  
+roc_rf_symp_pred <- roc_curve(presympt_rf_predictions, Truth, .pred_Control)  
+auc_rf_symp_pred <- roc_auc(presympt_rf_predictions, Truth, .pred_Control)  
+
+#Presympt models 
+roc_reg_presymp_train <- roc_curve(presympt_final_reg_fit$.predictions[[1]], Category, .pred_Control)  
+auc_reg_presymp_train <- roc_auc(presympt_final_reg_fit$.predictions[[1]], Category, .pred_Control)  
+roc_svm_presymp_train <- roc_curve(presympt_final_svm_fit$.predictions[[1]], Category, .pred_Control)  
+auc_svm_presymp_train <- roc_auc(presympt_final_svm_fit$.predictions[[1]], Category, .pred_Control)  
+roc_rf_presymp_train <- roc_curve(presympt_final_rf_fit$.predictions[[1]], Category, .pred_Control)  
+auc_rf_presymp_train <- roc_auc(presympt_final_rf_fit$.predictions[[1]], Category, .pred_Control)  
+
+#Presympt models predicting sympt
+roc_reg_presymp_pred <- roc_curve(sympt_reg_predictions, Truth, .pred_Control)  
+auc_reg_presymp_pred <- roc_auc(sympt_reg_predictions, Truth, .pred_Control)  
+roc_svm_presymp_pred <- roc_curve(sympt_svm_predictions, Truth, .pred_Control)  
+auc_svm_presymp_pred <- roc_auc(sympt_svm_predictions, Truth, .pred_Control)  
+roc_rf_presymp_pred <- roc_curve(sympt_rf_predictions, Truth, .pred_Control)  
+auc_rf_presymp_pred <- roc_auc(sympt_rf_predictions, Truth, .pred_Control)  
+
+
+(ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_rf_symp_pred, color = color_palette[1], size = 1.5) +
+    geom_path(data = roc_rf_symp_train, color = color_palette[2], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_rf_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
+    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_rf_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    coord_equal() +
+    theme_classic() +
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_svm_symp_pred, color = color_palette[1], size = 1.5) +
+    geom_path(data = roc_svm_symp_train, color = color_palette[2], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_svm_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
+    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_svm_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    coord_equal() +
+    theme_classic() +
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_reg_symp_pred, color = color_palette[1], size = 1.5) +
+    geom_path(data = roc_reg_symp_train, color = color_palette[2], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_reg_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
+    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_reg_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    coord_equal() +
+    theme_classic() +plot_layout(tag_level = "new")) /
+
+(ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_rf_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_path(data = roc_rf_presymp_train, color = color_palette[1], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.75, y = 0.50, label = paste0("AUC:", round(auc_rf_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.25, y = 1, label = paste0("AUC:", round(auc_rf_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() +
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_svm_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_path(data = roc_svm_presymp_train, color = color_palette[1], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.75, y = 0.50, label = paste0("AUC:", round(auc_svm_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.25, y = 1, label = paste0("AUC:", round(auc_svm_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() +
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_path(data = roc_reg_presymp_train, color = color_palette[1], size = 1.5)+
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.75, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(auc_reg_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() +plot_layout(tag_level = "new") ) + plot_annotation(tag_levels = c("A", 1))
+ggsave(filename = "Plots/ROC_plots.png", width = 12, height = 7, bg = "transparent")
+
+```
+

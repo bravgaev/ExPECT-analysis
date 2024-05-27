@@ -256,7 +256,7 @@ mean_meth_presympt <- apply(clusters_presympt, 2, mean) %>%
     left_join(presympt_annotation) 
 
 #Compare the means of this group with a Wilcox Rank Sum test   
-sympt_test <- wilcox.test(mean_meth_presympt$value[mean_meth_presympt$Category == "PE"], mean_meth_presympt$value[mean_meth_presympt$Category == "Control"], conf.int = T)
+presympt_mean_test <- wilcox.test(mean_meth_presympt$value[mean_meth_presympt$Category == "PE"], mean_meth_presympt$value[mean_meth_presympt$Category == "Control"], conf.int = T)
 
 #Compute mean methylation data for the Symptomatic group    
 mean_meth_sympt <- apply(clusters_sympt, 2, mean) %>% 
@@ -266,7 +266,7 @@ mean_meth_sympt <- apply(clusters_sympt, 2, mean) %>%
     mutate(Group = "Symptomatic")
 
 #Compare the means of this group with a Wilcox Rank Sum test 
-presympt_test <- wilcox.test(mean_meth_sympt$value[mean_meth_sympt$Category == "PE"], mean_meth_sympt$value[mean_meth_sympt$Category == "Control"], conf.int = T)
+sympt_mean_test <- wilcox.test(mean_meth_sympt$value[mean_meth_sympt$Category == "PE"], mean_meth_sympt$value[mean_meth_sympt$Category == "Control"], conf.int = T)
 
 #Combine both tibbles for plotting an overview
 mean_meth_combined <- bind_rows(mean_meth_presympt, mean_meth_sympt) %>% 
@@ -316,6 +316,7 @@ Heatmap plots are made to show the significance of the discovered DMR's, switch 
 ::: panel-tabset
 
 ```{r}
+#| label: annot_heatmap_sympt
 sympt_heatmap_annot <- sympt_annotation %>% column_to_rownames(var = "Sample_id") %>% 
     dplyr::select(Category, Sex, Aspirin) %>% 
     mutate(across(Category:Aspirin, as.factor))
@@ -324,21 +325,21 @@ sympt_heatmap_annot <- sympt_annotation %>% column_to_rownames(var = "Sample_id"
 #### Top 500
 
 ```{r}
-
+#| label: fig-heatmap_sympt500
 p_dmr500_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:500,]), sympt_heatmap_annot)
 ```
 
 #### Top 250
 
 ```{r}
-
+#| label: fig-heatmap_sympt250
 p_dmr250_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:250,]), sympt_heatmap_annot)
 ```
 
 #### Top 100
 
 ```{r}
-
+#| label: fig-heatmap_sympt100
 p_dmr100_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:100,]), sympt_heatmap_annot)
 ```
 :::
@@ -393,21 +394,21 @@ Heatmap plots are made to show the significance of the discovered DMR's, switch 
 #### Top 500
 
 ```{r}
-
+#| label: fig-heatmap_presympt500
 p_dmrfinder500_heatmap <- meth_heatmap(t(heatmap_data_finder[1:500,]), presympt_heatmap_annot)
 ```
 
 #### Top 250
 
 ```{r}
-
+#| label: fig-heatmap_presympt250
 p_dmrfinder250_heatmap <- meth_heatmap(t(heatmap_data_finder[1:250,]), presympt_heatmap_annot)
 ```
 
 #### Top 100
 
 ```{r}
-
+#| label: fig-heatmap_presympt100
 p_dmrfinder100_heatmap <- meth_heatmap(t(heatmap_data_finder[1:100,]), presympt_heatmap_annot)
 ```
 :::
@@ -470,16 +471,19 @@ GO_overlap <- goana(overlap_genes$entrezgene_id, FDR = 0.05)
 
 ### Presymptomatic
 ```{r}
+#| label : tbl-presympt_GO
 kable(topGO(GO_presympt))
 ```
 
 ### Symptomatic
 ```{r}
+#| label : tbl-sympt_GO
 kable(topGO(GO_sympt))
 ```
 
 ### Overlap
 ```{r}
+#| label : tbl-overlap_GO
 kable(topGO(GO_overlap))
 ```
 :::
@@ -594,7 +598,8 @@ Due to the small overlap between DMR's calculated on the pre-symptomatic and sym
 ### Symptomatic DMR's
 
 ```{r}
-#| label: long_dmr_clustering 
+#| label: long_dmr_clustering
+ 
 
 #Get longitudinal cohort cluster methylation for symptomatic DMRs 
 long_sympt_dmr <- clusters_long[str_replace(dmr_sympt_limma$CategoryPE$chromosomal_region, "(?<=[0-9][0-9][0-9]):(?=[0-9][0-9])", "-") ,] %>% t() %>% 
@@ -641,7 +646,8 @@ plot_regioncluster_long(long_sympt_dmr, colnames(clusters_long), long_annotation
 ### Pre-symptomatic DMR's
 
 ```{r}
-
+#| label : long_dmr_clustering_presympt
+#| 
 #Get longitudinal cohort cluster methylation for pre-symptomatic DMRs  
 bs_long <- bs_expect[,long_annotation$Sample_id]
 long_pre_dmr <- suppressWarnings(getMeth(bs_long, regions = dmr_presympt_finder_filtered, what = "perRegion", type = "smooth"))
@@ -661,8 +667,6 @@ plot_regioncluster_long(long_pre_dmr, colnames(clusters_long), long_annotation, 
 #| label: long_dmr
 #| fig-cap: "A limited set of DMRs can differentiate most cases and controls in a gestational age independent manner"
 
-
-
 #Compute DMRs that are consistent in the longitudinal group
 long_dmr_design <- model.matrix(~ Category + Gest_age_weeks + Batch, long_annotation)
 long_dmr <- train_limma(clusters_long, long_dmr_design)
@@ -678,5 +682,5 @@ A total of `r dim(long_dmr$CategoryPE)[1]` DMR's are found to be significant bet
 
 # More
 
-The code for the machine learning part of the paper can be found [here](expect_classifiers.qmd)
+The code for the machine learning part of the paper can be found [here](expect_classifiers.qmd) or use the navigation at the top of this page.
 
