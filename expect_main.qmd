@@ -333,7 +333,7 @@ p_dmr500_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:5
 
 ```{r}
 #| label: fig-heatmap_sympt250
-p_dmr250_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:250,]), sympt_heatmap_annot)
+p_dmr250_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:250,]), sympt_heatmap_annot, file = "Plots/sympt250_heatmap.png", height = 5)
 ```
 
 #### Top 100
@@ -402,7 +402,7 @@ p_dmrfinder500_heatmap <- meth_heatmap(t(heatmap_data_finder[1:500,]), presympt_
 
 ```{r}
 #| label: fig-heatmap_presympt250
-p_dmrfinder250_heatmap <- meth_heatmap(t(heatmap_data_finder[1:250,]), presympt_heatmap_annot)
+p_dmrfinder250_heatmap <- meth_heatmap(t(heatmap_data_finder[1:250,]), presympt_heatmap_annot,file = "Plots/presympt250_heatmap.png", height = 5)
 ```
 
 #### Top 100
