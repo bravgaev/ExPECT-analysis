@@ -110,6 +110,11 @@ plot_roc <-  function(fit_prediction, fit_truth, fit_control, test_predictions, 
     theme_classic()
 }
 
+#Set metric types to be collected
+sensPE <- metric_tweak("sensPE", sensitivity, event_level = "second")
+specPE <- metric_tweak("specPE", specificity, event_level = "second")
+cls_metrics <- metric_set(sensPE, specPE, accuracy)
+
 ``` 
 
 # Data loading and prepping 
@@ -123,78 +128,20 @@ setwd("~/Drive/ExPECT paper Symptomatic analysis/Code/Git_repo")
 #Load bsseq object
 bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/")
 
-#Load clustered methylation data
-clusters_expect <- readRDS("Data/Methylation/clusters_expect.Rds")
-
 #Load study annotation
 annotation <-  read_csv("Data/expect_annotation.csv")
 long_samples <- read_table("Data/longitudinal_samples.txt")
 
-
 #Split up annotations for ease of use
 
 long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)
-presympt_annotation <- annotation %>% filter(Group == "Pre-symptomatic") 
+presympt_annotation <- annotation %>% filter(Group == "Pre-symptomatic")
 sympt_annotation <- annotation %>% filter(Group == "Symptomatic") %>% 
                                 filter(Sample_id %nin% long_annotation$Sample_id)
-
-#Split up clusters for ease of use
-clusters_presympt <- clusters_expect %>% select(all_of(presympt_annotation$Sample_id))
-clusters_sympt <- clusters_expect %>%  select(all_of(sympt_annotation$Sample_id))
 ```
 
-The symptomatic set is first divided after which DMR's are recalculated using limma on the samples included in the training set alone. A set of 25 DMR's is then selected for further modelling to limit overfitting of the models. However, because our cohort is fairly limited, some overfitting is impossible to prevent.
+The presymptomatic set is first divided after which DMR's are recalculated using `DMRfinder` on the samples included in the training set alone. A set of 25 DMR's is then selected for further modelling to limit overfitting of the models. However, because our cohort is fairly limited, some overfitting is impossible to prevent.
 
-```{r}
-#| label: prep_sympt 
-
-#Prepare a dataset containing symptomatic samples
-model_meth_sympt <-  clusters_sympt %>% 
-  t(.) %>%
-  as_tibble(.) %>% 
-  bind_cols(dplyr::select(sympt_annotation, Category, Sample_id)) %>%  
-  mutate(Category = as.factor(Category)) %>% 
-  relocate(Category) 
-  
-#Create a training and test set
-sympt_data_split <- initial_split(model_meth_sympt, strata = Category)
-sympt_train <- training(sympt_data_split)
-sympt_test<- testing(sympt_data_split)
-
-#Recalculate DMRs on the test set
-sympt_train_dmr <- clusters_expect[, sympt_train$Sample_id]
-train_annot <- annotation[annotation$Sample_id %in% sympt_train$Sample_id,] %>% arrange(match(Sample_id, colnames(sympt_train_dmr)))
-sympt_train_dmr_design <-  model.matrix(~Category + Batch + Sex, train_annot)
-
-dmr_sympt_train <- train_limma(sympt_train_dmr, sympt_train_dmr_design)
-sympt_model_clusters <- rownames(dmr_sympt_train$CategoryPE)
-
-#Subset the training and testing set
-model_meth_sympt_subset <- dplyr::select(model_meth_sympt, Category, sympt_model_clusters[1:25])
-sympt_data_split_subset <- initial_split(dplyr::select(model_meth_sympt, Category, sympt_model_clusters[1:25]), strata = Category)
-sympt_train <- training(sympt_data_split_subset)
-sympt_test<- testing(sympt_data_split_subset)
-
-#Set validation folds
-sympt_folds <- vfold_cv(sympt_train, v = 5, strata = Category)
-sympt_loo_folds <- vfold_cv(sympt_train, v = nrow(sympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
-
-#Set metric types to be collected
-sensPE <- metric_tweak("sensPE", sensitivity, event_level = "second")
-specPE <- metric_tweak("specPE", specificity, event_level = "second")
-cls_metrics <- metric_set(sensPE, specPE, accuracy)
-
-#Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
-test_set_presympt <- clusters_presympt[sympt_model_clusters[1:25],] %>% 
-  t(.) %>%
-  as_tibble(.) %>% 
-  bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
-  mutate(Category = as.factor(Category)) %>% 
-  relocate(Category) 
-
-```
-
-The same approach is used for the presymptomatic cohort. This time DMR's are calculated with the `DMRfinder` package instead. Again the top 25 most significant DMR's are used for model creation
 
 ```{r}
 #| label: prep_presympt
@@ -220,6 +167,7 @@ presympt_data_split <- initial_split(presympt_annotation, strata = Category)
 presympt_train <- training(presympt_data_split)
 presympt_test<- testing(presympt_data_split)
 
+
 #Calculate DMRs on the training set
 pe_ids <- presympt_train[presympt_train$Category == "PE",]$Sample_id
 control_ids <- presympt_train[presympt_train$Category == "Control",]$Sample_id
@@ -230,33 +178,92 @@ presympt_t_stat <- BSmooth.tstat(bs_presympt_filtered,
                                  estimate.var = "group2",
                                  local.correct = T,
                                  verbose = T)
+
 dmr_presympt_finder_train <- dmrFinder(presympt_t_stat, qcutoff = c(0.01, 0.99))
 dmr_presympt_finder_train_filtered <- subset(dmr_presympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
 
 #Get methylation values for the testing an training set
-model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:8,]) %>% 
     t(.) %>%
     as_tibble(.) %>% 
-    bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
+    bind_cols(dplyr::select(presympt_annotation, Category, Sample_id)) %>%  
     mutate(Category = as.factor(Category)) %>% 
-    relocate(Category) 
-presympt_data_split <- initial_split(model_meth_presympt, strata = "Category")
-presympt_train <- training(presympt_data_split)
-presympt_test <- testing(presympt_data_split)
+    relocate(Category)
+
+
+presympt_data_split$data <- presympt_data_split$data %>% select(Sample_id) %>% left_join(model_meth_presympt) %>% select(-Sample_id)
+presympt_train_data <- training(presympt_data_split)
+presympt_test_data <-  testing(presympt_data_split)
 
 #Set validation folds
-presympt_folds <- vfold_cv(presympt_train, v = 5, strata = Category)
-presympt_loo_folds <- vfold_cv(presympt_train, v = nrow(presympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
+presympt_folds <- vfold_cv(presympt_train_data, v = 5, strata = Category)
+presympt_loo_folds <- vfold_cv(presympt_train_data, v = nrow(presympt_train_data)) #using a workaround here to get loocv as it's not really supported by tidymodels
 
 #Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
 bs_sympt <- bs_expect[,sympt_annotation$Sample_id]
 
-test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:8,]) %>% 
   t(.) %>%
   as_tibble(.) %>% 
   bind_cols(dplyr::select(sympt_annotation, Category)) %>%  
   mutate(Category = as.factor(Category)) %>% 
   relocate(Category) 
+```
+
+The same approach is used for the symptomatic cohort. Again the top 25 most significant DMR's are used for model creation.
+
+```{r}
+pData(bs_sympt) <- pData(bs_sympt) %>% as_tibble(rownames = NA) %>% 
+    rownames_to_column(var = "Sample_id") %>% 
+    left_join(sympt_annotation)
+rownames(pData(bs_sympt)) <- bs_sympt$Sample_id
+
+
+cov_sympt <- getCoverage(bs_sympt, type = "Cov", what = "perBase")
+keep <- which(rowSums(cov_sympt[,bs_sympt$Category == "Control"] >= 2) >= 2 &
+                rowSums(cov_sympt[,bs_sympt$Category == "PE"] >= 2) >= 2)
+bs_sympt_filtered <- bs_sympt[keep,]
+
+#Create a training and test set
+sympt_data_split <- initial_split(sympt_annotation, strata = Category)
+sympt_train <- training(sympt_data_split)
+sympt_test<- testing(sympt_data_split)
+
+#Calculate DMRs on the training set
+pe_ids_sympt <- sympt_train[sympt_train$Category == "PE",]$Sample_id
+control_ids_sympt <- sympt_train[sympt_train$Category == "Control",]$Sample_id
+
+sympt_t_stat <- BSmooth.tstat(bs_sympt_filtered, 
+                                 group1 = pe_ids_sympt,
+                                 group2 = control_ids_sympt,
+                                 estimate.var = "group2",
+                                 local.correct = T,
+                                 verbose = T)
+dmr_sympt_finder_train <- dmrFinder(sympt_t_stat, qcutoff = c(0.01, 0.99))
+dmr_sympt_finder_train_filtered <- subset(dmr_sympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
+
+model_meth_sympt <- getMeth(bs_sympt_filtered, what = "perRegion", type = "smooth", regions = dmr_sympt_finder_train_filtered[1:8,]) %>% 
+    t(.) %>%
+    as_tibble(.) %>% 
+    bind_cols(dplyr::select(sympt_annotation, Category, Sample_id)) %>%  
+    mutate(Category = as.factor(Category)) %>% 
+    relocate(Category) 
+
+sympt_data_split$data <- sympt_data_split$data %>% select(Sample_id) %>% left_join(model_meth_sympt) %>% select(-Sample_id)
+sympt_train <- training(sympt_data_split)
+sympt_test <- testing(sympt_data_split)
+
+#Set validation folds
+sympt_folds <- vfold_cv(sympt_train, v = 5, strata = Category)
+sympt_loo_folds <- vfold_cv(sympt_train, v = nrow(sympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
+   
+
+test_set_presympt <- getMeth(bs_presympt, type = "smooth", what = "perRegion", regions = dmr_sympt_finder_train_filtered[1:8,]) %>% 
+  t(.) %>%
+  as_tibble(.) %>% 
+  bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
+  mutate(Category = as.factor(Category)) %>% 
+  relocate(Category)        
 ```
 
 # Machine learning
@@ -295,6 +302,7 @@ rf_grid <- grid_regular(trees(), finalize(mtry(), x = sympt_folds), min_n(), lev
 sympt_rf_tune <- rf_wf %>% 
   tune_grid(resamples = sympt_folds, grid = rf_grid)
 
+
 #get the best model
 sympt_best_rf <- sympt_rf_tune %>% 
   select_best(metric = "accuracy")
@@ -304,15 +312,15 @@ sympt_final_rf_wf <- rf_wf %>%
   finalize_workflow(sympt_best_rf)
 
 sympt_final_rf_fit <- sympt_final_rf_wf %>% 
-  last_fit(sympt_data_split_subset)
+  last_fit(sympt_data_split)
 
 #Get metrics 
 sympt_rf_metrics <- sympt_final_rf_wf %>% 
-  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
+  last_fit(sympt_data_split, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the pre-symptomatic data
 
-sympt_rf_fit <- sympt_final_rf_wf %>% fit(model_meth_sympt_subset)
+sympt_rf_fit <- sympt_final_rf_wf %>% fit(select(model_meth_sympt, -Sample_id))
 presympt_rf_predictions <- predict(sympt_rf_fit, test_set_presympt, type ="prob") %>% 
     bind_cols(Truth = test_set_presympt$Category)
 
@@ -329,6 +337,7 @@ The best performing random forest model has the following parameters `r kable(se
 ```{r}
 #| label: presympt_rf
 
+rf_grid <- grid_regular(trees(), finalize(mtry(), x = presympt_folds), min_n(), levels = 5)
 #fit the pre symptomatic resamplings
 presympt_rf_tune <- rf_wf %>% 
   tune_grid(resamples = presympt_folds, grid = rf_grid)
@@ -341,7 +350,7 @@ presympt_best_rf <- presympt_rf_tune %>%
 presympt_final_rf_wf <- rf_wf %>% 
   finalize_workflow(presympt_best_rf)
 
-presympt_final_rf_fit <- sympt_final_rf_wf %>% 
+presympt_final_rf_fit <- presympt_final_rf_wf %>% 
   last_fit(presympt_data_split)
 
 #Get metrics 
@@ -350,7 +359,7 @@ presympt_rf_metrics <- presympt_final_rf_wf %>%
 
 #Test the model on the symptomatic data
 
-presympt_rf_fit <- presympt_final_rf_wf %>% fit(model_meth_presympt)
+presympt_rf_fit <- presympt_final_rf_wf %>% fit(select(model_meth_presympt, -Sample_id))
 sympt_rf_predictions <- predict(presympt_rf_fit, test_set_sympt, type ="prob") %>% 
     bind_cols(Truth = test_set_sympt$Category)
 
@@ -363,7 +372,7 @@ The best performing random forest model has the following parameters `r kable(se
 
 ## Support vector machine
 
-For the support vector machine, the `kernlab`package is used set to classification mode. The only hyperparameter that is tuned is the __cost__ parameter.
+For the support vector machine, the `kernlab`-package is used set to classification mode. The only hyperparameter that is tuned is the __cost__ parameter.
 More info on support vector machines can be read [here](https://en.wikipedia.org/wiki/Support_vector_machine)
 
 ::: panel-tabset
@@ -397,14 +406,14 @@ sympt_final_svm_wf <- svm_wf %>%
   finalize_workflow(sympt_best_svm)
   
 sympt_final_svm_fit <- sympt_final_svm_wf %>% 
-  last_fit(sympt_data_split_subset)
+  last_fit(sympt_data_split)
 
 #Get metrics 
 sympt_svm_metrics <- sympt_final_svm_wf %>% 
-  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
+  last_fit(sympt_data_split, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the pre-symptomatic data
-sympt_svm_fit <- sympt_final_svm_wf %>% fit(model_meth_sympt_subset)
+sympt_svm_fit <- sympt_final_svm_wf %>% fit(select(model_meth_sympt, -Sample_id))
 presympt_svm_predictions <- predict(sympt_svm_fit, test_set_presympt, type ="prob") %>% 
     bind_cols(Truth = test_set_presympt$Category)
 
@@ -439,7 +448,7 @@ presympt_svm_metrics <- presympt_final_svm_wf %>%
 
 #Test the model on the symptomatic data
 
-presympt_svm_fit <- presympt_final_svm_wf %>% fit(model_meth_presympt)
+presympt_svm_fit <- presympt_final_svm_wf %>% fit(select(model_meth_presympt, -Sample_id))
 sympt_svm_predictions <- predict(presympt_svm_fit, test_set_sympt, type ="prob") %>% 
     bind_cols(Truth = test_set_sympt$Category)
 
@@ -487,15 +496,15 @@ sympt_final_reg_wf <- reg_wf %>%
   finalize_workflow(sympt_best_reg)
 
 sympt_final_reg_fit <- sympt_final_reg_wf %>%   
-  last_fit(sympt_data_split_subset)
+  last_fit(sympt_data_split)
 
 #Get metrics 
 sympt_reg_metrics <- sympt_final_reg_wf %>% 
-  last_fit(sympt_data_split_subset, metrics = cls_metrics) %>% collect_metrics()
+  last_fit(sympt_data_split, metrics = cls_metrics) %>% collect_metrics()
 
 #Test the model on the pre-symptomatic data
 
-sympt_reg_fit <- sympt_final_reg_wf %>% fit(model_meth_sympt_subset)
+sympt_reg_fit <- sympt_final_reg_wf %>% fit(select(model_meth_sympt, -Sample_id))
 presympt_reg_predictions <- predict(sympt_reg_fit, test_set_presympt, type ="prob") %>% 
     bind_cols(Truth = test_set_presympt$Category)
 
@@ -530,7 +539,7 @@ presympt_reg_metrics <- presympt_final_reg_wf %>%
 
 #Test the model on the pre-symptomatic data
 
-presympt_reg_fit <- presympt_final_reg_wf %>% fit(model_meth_presympt)
+presympt_reg_fit <- presympt_final_reg_wf %>% fit(select(model_meth_presympt, -Sample_id))
 sympt_reg_predictions <- predict(presympt_reg_fit, test_set_sympt, type ="prob") %>% 
     bind_cols(Truth = test_set_sympt$Category)
 
