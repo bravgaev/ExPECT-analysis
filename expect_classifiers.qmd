@@ -47,6 +47,7 @@ library(fuzzyjoin)
 library(ggpubr)
 library(tidyverse)
 library(tidymodels)
+library(themis)
 
 
 #Plotting colors
@@ -163,6 +164,7 @@ keep <- which(rowSums(cov_presympt[,bs_presympt$Category == "Control"] >= 2) >= 
 bs_presympt_filtered <- bs_presympt[keep,]
           
 #Create a training and test set
+set.seed(2341)
 presympt_data_split <- initial_split(presympt_annotation, strata = Category)
 presympt_train <- training(presympt_data_split)
 presympt_test<- testing(presympt_data_split)
@@ -183,7 +185,7 @@ dmr_presympt_finder_train <- dmrFinder(presympt_t_stat, qcutoff = c(0.01, 0.99))
 dmr_presympt_finder_train_filtered <- subset(dmr_presympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
 
 #Get methylation values for the testing an training set
-model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:8,]) %>% 
+model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
     t(.) %>%
     as_tibble(.) %>% 
     bind_cols(dplyr::select(presympt_annotation, Category, Sample_id)) %>%  
@@ -202,7 +204,7 @@ presympt_loo_folds <- vfold_cv(presympt_train_data, v = nrow(presympt_train_data
 #Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
 bs_sympt <- bs_expect[,sympt_annotation$Sample_id]
 
-test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:8,]) %>% 
+test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
   t(.) %>%
   as_tibble(.) %>% 
   bind_cols(dplyr::select(sympt_annotation, Category)) %>%  
@@ -225,6 +227,7 @@ keep <- which(rowSums(cov_sympt[,bs_sympt$Category == "Control"] >= 2) >= 2 &
 bs_sympt_filtered <- bs_sympt[keep,]
 
 #Create a training and test set
+set.seed(2341)
 sympt_data_split <- initial_split(sympt_annotation, strata = Category)
 sympt_train <- training(sympt_data_split)
 sympt_test<- testing(sympt_data_split)
@@ -242,7 +245,7 @@ sympt_t_stat <- BSmooth.tstat(bs_sympt_filtered,
 dmr_sympt_finder_train <- dmrFinder(sympt_t_stat, qcutoff = c(0.01, 0.99))
 dmr_sympt_finder_train_filtered <- subset(dmr_sympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
 
-model_meth_sympt <- getMeth(bs_sympt_filtered, what = "perRegion", type = "smooth", regions = dmr_sympt_finder_train_filtered[1:8,]) %>% 
+model_meth_sympt <- getMeth(bs_sympt_filtered, what = "perRegion", type = "smooth", regions = dmr_sympt_finder_train_filtered[1:25,]) %>% 
     t(.) %>%
     as_tibble(.) %>% 
     bind_cols(dplyr::select(sympt_annotation, Category, Sample_id)) %>%  
@@ -258,7 +261,7 @@ sympt_folds <- vfold_cv(sympt_train, v = 5, strata = Category)
 sympt_loo_folds <- vfold_cv(sympt_train, v = nrow(sympt_train)) #using a workaround here to get loocv as it's not really supported by tidymodels
    
 
-test_set_presympt <- getMeth(bs_presympt, type = "smooth", what = "perRegion", regions = dmr_sympt_finder_train_filtered[1:8,]) %>% 
+test_set_presympt <- getMeth(bs_presympt, type = "smooth", what = "perRegion", regions = dmr_sympt_finder_train_filtered[1:25,]) %>% 
   t(.) %>%
   as_tibble(.) %>% 
   bind_cols(dplyr::select(presympt_annotation, Category)) %>%  
@@ -284,32 +287,36 @@ More info on random forest classifiers can be found on [Wikipedia](https://en.wi
 ```{r}
 #| label: sympt_rf
 
+#Set a sampling recipe for the symptomatic data
+
+sampling_rec <- recipe(Category ~ ., data=sympt_train) %>% step_rose(Category)
+
 #make a rf model
 rf_mod <- rand_forest(trees = tune(), mtry = tune(), min_n = tune()) %>% 
   set_engine("ranger") %>% 
   set_mode("classification")
-    
 
 #make a workflow for resampling
-rf_wf <- workflow() %>% 
+rf_wf_sympt <- workflow() %>% 
   add_model(rf_mod) %>% 
-  add_formula(Category ~ .) 
+  add_recipe(sampling_rec) 
 
 #Make a grid for a parameter search
 rf_grid <- grid_regular(trees(), finalize(mtry(), x = sympt_folds), min_n(), levels = 5)
 
 #fit the resamplings
-sympt_rf_tune <- rf_wf %>% 
+sympt_rf_tune <- rf_wf_sympt %>% 
   tune_grid(resamples = sympt_folds, grid = rf_grid)
-
 
 #get the best model
 sympt_best_rf <- sympt_rf_tune %>% 
   select_best(metric = "accuracy")
 
 #make the final fit and evaluate the test set
-sympt_final_rf_wf <- rf_wf %>% 
+sympt_final_rf_wf <- rf_wf_sympt %>% 
   finalize_workflow(sympt_best_rf)
+
+sympt_rf_resample_fit <- fit_resamples(sympt_final_rf_wf, resamples = sympt_folds, metrics = cls_metrics)
 
 sympt_final_rf_fit <- sympt_final_rf_wf %>% 
   last_fit(sympt_data_split)
@@ -337,9 +344,15 @@ The best performing random forest model has the following parameters `r kable(se
 ```{r}
 #| label: presympt_rf
 
+sampling_rec_presympt <-  recipe(Category ~ ., data=presympt_train_data) %>% step_rose(Category)
+
+rf_wf_presympt <- workflow() %>% 
+  add_model(rf_mod) %>% 
+  add_recipe(sampling_rec_presympt) 
+
 rf_grid <- grid_regular(trees(), finalize(mtry(), x = presympt_folds), min_n(), levels = 5)
 #fit the pre symptomatic resamplings
-presympt_rf_tune <- rf_wf %>% 
+presympt_rf_tune <- rf_wf_presympt %>% 
   tune_grid(resamples = presympt_folds, grid = rf_grid)
 
 #get the best model
@@ -347,8 +360,10 @@ presympt_best_rf <- presympt_rf_tune %>%
   select_best(metric = "accuracy")
 
 #make the final fit and evaluate the test set
-presympt_final_rf_wf <- rf_wf %>% 
+presympt_final_rf_wf <- rf_wf_presympt %>% 
   finalize_workflow(presympt_best_rf)
+
+presympt_rf_resample_fit <- fit_resamples(presympt_final_rf_wf, resamples = presympt_folds, metrics = cls_metrics)
 
 presympt_final_rf_fit <- presympt_final_rf_wf %>% 
   last_fit(presympt_data_split)
@@ -388,23 +403,25 @@ svm_mod <- svm_linear(cost = tune()) %>%
   set_mode("classification")
 
 #Make a workflow
-svm_wf <- workflow() %>% 
+svm_wf_sympt <- workflow() %>% 
   add_model(svm_mod) %>% 
-  add_formula(Category ~ .)
+  add_recipe(sampling_rec)
 
 #Make a parameter grid
 svm_grid <- grid_regular(cost(), levels = 5)
 
 #Fit the resamples and do a grid search for symptomatic samples
-svm_tune <- svm_wf %>% 
+svm_tune <- svm_wf_sympt %>% 
   tune_grid(resamples = sympt_folds, grid = svm_grid, metrics =  cls_metrics)
 
 sympt_best_svm <- svm_tune %>% 
   select_best(metric = "accuracy")
 
-sympt_final_svm_wf <- svm_wf %>% 
+sympt_final_svm_wf <- svm_wf_sympt %>% 
   finalize_workflow(sympt_best_svm)
-  
+
+sympt_svm_resample_fit <- fit_resamples(sympt_final_svm_wf, resamples = sympt_folds, metrics = cls_metrics)
+
 sympt_final_svm_fit <- sympt_final_svm_wf %>% 
   last_fit(sympt_data_split)
 
@@ -429,16 +446,22 @@ The best performing support vector machine has the following parameters `r kable
 ```{r}
 #| label: presympt_svm
 
+svm_wf_presympt <- workflow() %>% 
+  add_model(svm_mod) %>% 
+  add_recipe(sampling_rec_presympt)
+
 #Fit the resamples and do a grid search for symptomatic samples
-presympt_svm_tune <- svm_wf %>% 
+presympt_svm_tune <- svm_wf_presympt %>% 
   tune_grid(resamples = presympt_folds, grid = svm_grid, metrics =  cls_metrics)
 
 presympt_best_svm <- svm_tune %>% 
   select_best(metric = "accuracy")
 
-presympt_final_svm_wf <- svm_wf %>% 
+presympt_final_svm_wf <- svm_wf_presympt %>% 
   finalize_workflow(presympt_best_svm)
-  
+
+presympt_svm_resample_fit <- fit_resamples(presympt_final_svm_wf, resamples = presympt_folds, metrics = cls_metrics)
+
 presympt_final_svm_fit <- presympt_final_svm_wf %>% 
   last_fit(presympt_data_split)
 
@@ -478,22 +501,25 @@ reg_mod <- logistic_reg(penalty = tune(), mixture = tune()) %>%
   set_mode("classification")
 
 #Make workflow
-reg_wf <- workflow() %>%
+reg_wf_sympt <- workflow() %>%
   add_model(reg_mod) %>%
-  add_formula(Category ~ .)
+ add_recipe(sampling_rec)
 
 #Make a parameter grid
 reg_grid <- grid_regular(penalty(), mixture(), levels = 5)
 
 #Tune the model
-sympt_reg_tune <- reg_wf %>%
+sympt_reg_tune <- reg_wf_sympt %>%
   tune_grid(resamples = sympt_folds, grid = reg_grid, metrics = cls_metrics)
 
 sympt_best_reg <- sympt_reg_tune %>%
   select_best(metric = "accuracy")
 
-sympt_final_reg_wf <- reg_wf %>%
+sympt_final_reg_wf <- reg_wf_sympt %>%
   finalize_workflow(sympt_best_reg)
+
+sympt_reg_resample_fit <- fit_resamples(sympt_final_reg_wf, resamples = sympt_folds, metrics = cls_metrics)
+
 
 sympt_final_reg_fit <- sympt_final_reg_wf %>%   
   last_fit(sympt_data_split)
@@ -520,15 +546,21 @@ The best performing regression model has the following parameters `r kable(selec
 ```{r}
 #| label: presympt_reg
 
+reg_wf_presympt <- workflow() %>%
+  add_model(reg_mod) %>%
+ add_recipe(sampling_rec_presympt)
+
 #Tune the model
-presympt_reg_tune <- reg_wf %>%
+presympt_reg_tune <- reg_wf_presympt %>%
   tune_grid(resamples = presympt_folds, grid = reg_grid, metrics = cls_metrics)
 
 presympt_best_reg <- presympt_reg_tune %>%
   select_best(metric = "accuracy")
 
-presympt_final_reg_wf <- reg_wf %>%
+presympt_final_reg_wf <- reg_wf_presympt %>%
   finalize_workflow(sympt_best_reg)
+
+presympt_reg_resample_fit <- fit_resamples(presympt_final_reg_wf, resamples = presympt_folds, metrics = cls_metrics)
 
 presympt_final_reg_fit <- presympt_final_reg_wf %>%   
   last_fit(presympt_data_split)

@@ -22,7 +22,7 @@ chr.in.seqnames <- T
 chrs <- as.character(c(1:22))                  
 # or e.g. c(1:22, 'X', 'Y'); which chrs should be included?
 
-min.CpG.depth <- 5
+min.CpG.depth <- 1
 # makes results more robust (& saves discspace); default = 1 or more (no filtering)
 
 fraction.NA.allowed <- .5 # used to be .75 !
