@@ -654,7 +654,7 @@ auc_rf_presymp_pred <- roc_auc(sympt_rf_predictions, Truth, .pred_Control)
     geom_path(data = roc_rf_symp_train, color = color_palette[2], size = 1.5)+
     geom_abline(lty = 3) +
     geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_rf_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
-    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_rf_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.2, y = 0.90, label = paste0("AUC:", round(auc_rf_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
     coord_equal() +
     theme_classic() +
 ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
@@ -662,7 +662,7 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     geom_path(data = roc_svm_symp_train, color = color_palette[2], size = 1.5)+
     geom_abline(lty = 3) +
     geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_svm_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
-    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_svm_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.2, y = 0.90, label = paste0("AUC:", round(auc_svm_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
     coord_equal() +
     theme_classic() +
 ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
@@ -670,7 +670,7 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     geom_path(data = roc_reg_symp_train, color = color_palette[2], size = 1.5)+
     geom_abline(lty = 3) +
     geom_text(aes(x = 0.85, y = 0.50, label = paste0("AUC:", round(auc_reg_symp_pred$.estimate, 4))), color = color_palette[1], size = 4) +
-    geom_text(aes(x = 0.35, y = 0.80, label = paste0("AUC:", round(auc_reg_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.2, y = 0.90, label = paste0("AUC:", round(auc_reg_symp_train$.estimate, 4))), color = color_palette[2], size = 4) +
     coord_equal() +
     theme_classic() +plot_layout(tag_level = "new")) /
 
@@ -679,7 +679,7 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     geom_path(data = roc_rf_presymp_train, color = color_palette[1], size = 1.5)+
     geom_abline(lty = 3) +
     geom_text(aes(x = 0.75, y = 0.50, label = paste0("AUC:", round(auc_rf_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
-    geom_text(aes(x = 0.25, y = 1, label = paste0("AUC:", round(auc_rf_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
+    geom_text(aes(x = 0.2, y = 1, label = paste0("AUC:", round(auc_rf_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
     coord_equal() +
     theme_classic() +
 ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
@@ -697,7 +697,7 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     geom_text(aes(x = 0.75, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
     geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(auc_reg_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
     coord_equal() +
-    theme_classic() +plot_layout(tag_level = "new") ) + plot_annotation(tag_levels = c("A", 1))
+    theme_classic() +plot_layout(tag_level = "new") ) + patchwork::plot_annotation(tag_levels = c("A", 1))
 ggsave(filename = "Plots/ROC_plots.png", width = 12, height = 7, bg = "transparent")
 
 ```

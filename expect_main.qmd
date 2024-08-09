@@ -149,14 +149,14 @@ bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation")
 clusters_expect <- readRDS("Data/Methylation/clusters_expect.Rds")
 
 #Load study annotation
-annotation <-  read_csv("Data/expect_annotation.csv")
+annotation <-  read_csv("Data/expect_annotation.csv") %>% mutate(Group = ifelse(Group == "Pre-symptomatic", "Presymptomatic", "Symptomatic"))
 long_samples <- read_table("Data/longitudinal_samples.txt")
 
 
 #Split up annotations for ease of use
 
 long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)
-presympt_annotation <- annotation %>% filter(Group == "Pre-symptomatic") 
+presympt_annotation <- annotation %>% filter(Group == "Presymptomatic") 
 sympt_annotation <- annotation %>% filter(Group == "Symptomatic") %>% 
                                 filter(Sample_id %nin% long_annotation$Sample_id)
 
@@ -184,7 +184,7 @@ Sampling distributions for the different sample groups are plotted to get an ove
     scale_fill_manual(values = color_palette, labels = c("Control", "Preeclampsia")) +
     xlab("")+
     ylab("Number of samples")+
-    ggtitle("Pre-symptomatic cohort") +
+    ggtitle("Presymptomatic cohort") +
     theme_classic() +
 
 ggplot(data = sympt_annotation) +
@@ -208,6 +208,13 @@ ggplot(data = long_annotation) +
     theme_classic() + 
     patchwork::plot_annotation(tag_levels ="A") +
     plot_layout(guides = "collect") & theme(legend.position = 'bottom')
+
+cohort_overlap <- list("Symptomatic" = sympt_annotation$Patient[!duplicated(sympt_annotation$Patient)],
+                       "Presymptomatic" = presympt_annotation$Patient[!duplicated(presympt_annotation$Patient)],
+                       "Longitudinal" = long_annotation$Patient[!duplicated(long_annotation$Patient)])
+
+ggvenn::ggvenn(cohort_overlap, fill_color = color_palette)
+overlapping_patients <- intersect(sympt_annotation$Patient[!duplicated(sympt_annotation$Patient)],presympt_annotation$Patient[!duplicated(presympt_annotation$Patient)])
 ```
 
 Dimensionality reduction is performed on the methylation values of the clusters to gain an overview of the samples and spot potential outliers.
@@ -228,7 +235,7 @@ ggplot(PCA_plot_data_presympt) +
     geom_point(aes(PC1, PC2, color = Category)) +
     scale_color_manual(values = color_palette) +
     theme_classic() +
-    ggtitle("Pre-symptomatic cohort") +
+    ggtitle("Presymptomatic cohort") +
 
 
 ggplot(PCA_plot_data) +
@@ -256,7 +263,7 @@ mean_meth_presympt <- apply(clusters_presympt, 2, mean) %>%
     left_join(presympt_annotation) 
 
 #Compare the means of this group with a Wilcox Rank Sum test   
-presympt_mean_test <- wilcox.test(mean_meth_presympt$value[mean_meth_presympt$Category == "PE"], mean_meth_presympt$value[mean_meth_presympt$Category == "Control"], conf.int = T)
+presympt_mean_test <- wilcox.test(mean_meth_presympt$value[mean_meth_presympt$Category == "PE"], mean_meth_presympt$value[mean_meth_presympt$Category == "Control"], conf.int = T, p.adjust.methods = "BH")
 
 #Compute mean methylation data for the Symptomatic group    
 mean_meth_sympt <- apply(clusters_sympt, 2, mean) %>% 
@@ -264,9 +271,11 @@ mean_meth_sympt <- apply(clusters_sympt, 2, mean) %>%
     mutate(Sample_id = colnames(clusters_sympt)) %>% 
     right_join(sympt_annotation) %>% 
     mutate(Group = "Symptomatic")
+#remove dependent samples for Wilcoxon test
+mean_meth_sympt <- mean_meth_sympt %>% filter(Patient %nin% overlapping_patients)
 
 #Compare the means of this group with a Wilcox Rank Sum test 
-sympt_mean_test <- wilcox.test(mean_meth_sympt$value[mean_meth_sympt$Category == "PE"], mean_meth_sympt$value[mean_meth_sympt$Category == "Control"], conf.int = T)
+sympt_mean_test <- wilcox.test(mean_meth_sympt$value[mean_meth_sympt$Category == "PE"], mean_meth_sympt$value[mean_meth_sympt$Category == "Control"], conf.int = T, p.adjust.methods = "BH")
 
 #Combine both tibbles for plotting an overview
 mean_meth_combined <- bind_rows(mean_meth_presympt, mean_meth_sympt) %>% 
@@ -276,7 +285,7 @@ mean_meth_combined <- bind_rows(mean_meth_presympt, mean_meth_sympt) %>%
 ggplot(mean_meth_combined, aes(Category, value)) +
     geom_boxplot() +
     geom_beeswarm(aes(color = Category), stroke = 1, shape = 1) +
-    stat_compare_means(comparisons = list(c("Pre-symptomatic Control", "Pre-symptomatic PE"),c("Symptomatic Control", "Symptomatic PE"),c("Pre-symptomatic Control", "Symptomatic Control"), c("Pre-symptomatic PE", "Symptomatic PE") ))+
+    stat_compare_means(comparisons = list(c("Presymptomatic Control", "Presymptomatic PE"),c("Symptomatic Control", "Symptomatic PE"),c("Presymptomatic Control", "Symptomatic Control"), c("Presymptomatic PE", "Symptomatic PE")),method ="wilcox.test", p.adjust.methods = "BH", label = "p.signif")+
     scale_color_manual(values = color_palette) + 
     ylab("Mean genome wide methylation level") +
     xlab("")+
