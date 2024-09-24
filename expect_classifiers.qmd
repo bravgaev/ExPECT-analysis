@@ -558,7 +558,7 @@ presympt_best_reg <- presympt_reg_tune %>%
   select_best(metric = "accuracy")
 
 presympt_final_reg_wf <- reg_wf_presympt %>%
-  finalize_workflow(sympt_best_reg)
+  finalize_workflow(presympt_best_reg)
 
 presympt_reg_resample_fit <- fit_resamples(presympt_final_reg_wf, resamples = presympt_folds, metrics = cls_metrics)
 
@@ -699,6 +699,201 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     coord_equal() +
     theme_classic() +plot_layout(tag_level = "new") ) + patchwork::plot_annotation(tag_levels = c("A", 1))
 ggsave(filename = "Plots/ROC_plots.png", width = 12, height = 7, bg = "transparent")
+
+```
+
+
+```{r}
+#| label: "Regression model validation"
+
+#Load in the validation set 
+val_set <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/Validation_set/")
+
+#Get dataframe for model classification
+val_set_meth <- getMeth(val_set, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+    t(.) %>%
+    as_tibble(.) %>% 
+    replace_na(list(V16 = 0.5, V20=0.5))
+#Two DMRs seem to be missing, try filling these in
+val_predictions <- predict(presympt_reg_fit, val_set_meth, type="prob") %>% 
+    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
+    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
+
+#Different approach, use other DMRs to retrain model
+val_set_meth_2 <- getMeth(val_set, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:27,])  %>% 
+    t(.) %>%
+    as_tibble(.) %>% 
+    select(-c(V16,V20))
+
+#Retrain model based on new DMR set
+presympt_training_data_2 <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:27,]) %>% 
+    t(.) %>%
+    as_tibble(.) %>% 
+    select(-c(V16,V20)) %>% 
+    bind_cols(dplyr::select(presympt_annotation, Category, Sample_id)) %>%  
+    mutate(Category = as.factor(Category)) %>% 
+    relocate(Category) %>% 
+    column_to_rownames("Sample_id")
+
+presympt_data_split_2 <- initial_split(presympt_training_data_2, strata = Category)
+presympt_train_2 <- training(presympt_data_split_2)
+presympt_test_2 <- testing(presympt_data_split_2)
+
+presympt_folds_2 <- vfold_cv(presympt_train_2, v = 5, strata = Category)
+
+sampling_rec_presympt_2 <-  recipe(Category ~ ., data=presympt_train_2) %>% step_rose(Category)
+
+reg_wf_presympt_2 <- workflow() %>%
+    add_model(reg_mod) %>%
+    add_recipe(sampling_rec_presympt_2)
+
+presympt_reg_tune_2 <- reg_wf_presympt_2 %>%
+  tune_grid(resamples = presympt_folds_2, grid = reg_grid, metrics = cls_metrics)
+
+presympt_best_reg_2 <- presympt_reg_tune_2 %>%
+  select_best(metric = "accuracy")
+
+presympt_final_reg_wf_2 <- reg_wf_presympt_2 %>%
+  finalize_workflow(presympt_best_reg_2)
+
+presympt_final_reg_fit_2 <- presympt_final_reg_wf_2 %>% last_fit(presympt_data_split_2)
+presympt_reg_fit_2 <- presympt_final_reg_wf_2 %>% fit(presympt_training_data_2)
+
+val_predictions_2<- predict(presympt_reg_fit_2, val_set_meth_2, type="prob") %>% 
+    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
+    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
+
+#Load annotation and make roc curves
+
+validation_annot <- read_xlsx("Data/validation_annotation.xlsx", sheet=3)
+val_predictions_2 <- val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
+
+
+presympt_ref_fit_2_roc <- roc_curve(presympt_final_reg_fit_2$.predictions[[1]], Category, .pred_Control)
+presympt_ref_fit_2_auc <- roc_auc(presympt_final_reg_fit_2$.predictions[[1]], Category, .pred_Control)
+validation_roc <- roc_curve(val_predictions_2, Category, .pred_Control)
+validation_auc <- roc_auc(val_predictions_2, Category, .pred_Control)
+
+val_sens <- sensitivity(val_predictions_2, Category, Prediction, event_level = "second")
+val_spec <- specificity(val_predictions_2, Category, Prediction, event_level = "second")
+
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = validation_roc, color = color_palette[3], size = 1.5) +
+    geom_path(data = presympt_ref_fit_2_roc, color = color_palette[1], size = 1.5)+
+    geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_abline(lty = 3) +
+    geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(validation_auc$.estimate, 4), "\nSENS:", round(val_sens$.estimate, 2), "\nSPEC:", round(val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
+    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_ref_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() 
+
+```
+
+```{r}
+#Repeat the validation for both the random forest and SVM model
+
+svm_wf_presympt_2 <- workflow() %>% 
+  add_model(svm_mod) %>% 
+  add_recipe(sampling_rec_presympt_2)
+
+#Fit the resamples and do a grid search for symptomatic samples
+svm_tune_2 <- svm_wf_presympt_2 %>% 
+  tune_grid(resamples = presympt_folds_2, grid = svm_grid, metrics =  cls_metrics)
+
+presympt_best_svm_2 <- svm_tune_2 %>% 
+  select_best(metric = "accuracy")
+
+presympt_final_svm_wf_2 <- svm_wf_presympt_2 %>% 
+  finalize_workflow(presympt_best_svm_2)
+
+presympt_svm_resample_fit_2 <- fit_resamples(presympt_final_svm_wf_2, resamples = presympt_folds_2, metrics = cls_metrics)
+
+presympt_final_svm_fit_2 <- presympt_final_svm_wf_2 %>% 
+  last_fit(presympt_data_split_2)
+
+presympt_svm_fit_2 <- presympt_final_svm_wf_2 %>% fit(presympt_training_data_2)
+
+svm_val_predictions_2<- predict(presympt_svm_fit_2, val_set_meth_2, type="prob") %>% 
+    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
+    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
+
+svm_val_predictions_2 <- svm_val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
+
+
+presympt_svm_fit_2_roc <- roc_curve(presympt_final_svm_fit_2$.predictions[[1]], Category, .pred_Control)
+presympt_svm_fit_2_auc <- roc_auc(presympt_final_svm_fit_2$.predictions[[1]], Category, .pred_Control)
+svm_validation_roc <- roc_curve(svm_val_predictions_2, Category, .pred_Control)
+svm_validation_auc <- roc_auc(svm_val_predictions_2, Category, .pred_Control)
+
+svm_val_sens <- sensitivity(svm_val_predictions_2, Category, Prediction, event_level = "second")
+svm_val_spec <- specificity(svm_val_predictions_2, Category, Prediction, event_level = "second")
+
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = svm_validation_roc, color = color_palette[3], size = 1.5) +
+    geom_path(data = presympt_svm_fit_2_roc, color = color_palette[1], size = 1.5)+
+    #geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_abline(lty = 3) +
+    #geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(svm_validation_auc$.estimate, 4), "\nSENS:", round(svm_val_sens$.estimate, 2), "\nSPEC:", round(svm_val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
+    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_svm_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() 
+```
+```{r}
+#Validate RF model
+
+rf_wf_presympt_2 <- workflow() %>% 
+  add_model(rf_mod) %>% 
+  add_recipe(sampling_rec_presympt_2) 
+
+#fit the pre symptomatic resamplings
+presympt_rf_tune_2 <- rf_wf_presympt_2 %>% 
+  tune_grid(resamples = presympt_folds_2, grid = rf_grid)
+
+#get the best model
+presympt_best_rf_2 <- presympt_rf_tune_2 %>% 
+  select_best(metric = "accuracy")
+
+#make the final fit and evaluate the test set
+presympt_final_rf_wf_2 <- rf_wf_presympt_2 %>% 
+  finalize_workflow(presympt_best_rf_2)
+
+presympt_rf_resample_fit_2 <- fit_resamples(presympt_final_rf_wf_2, resamples = presympt_folds_2, metrics = cls_metrics)
+
+presympt_final_rf_fit_2 <- presympt_final_rf_wf_2 %>% 
+  last_fit(presympt_data_split_2)
+
+#Test the model on the symptomatic data
+
+presympt_rf_fit_2 <- presympt_final_rf_wf_2 %>% fit(presympt_training_data_2)
+
+
+rf_val_predictions_2<- predict(presympt_rf_fit_2, val_set_meth_2, type="prob") %>% 
+    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
+    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
+
+rf_val_predictions_2 <- rf_val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
+
+
+presympt_rf_fit_2_roc <- roc_curve(presympt_final_rf_fit_2$.predictions[[1]], Category, .pred_Control)
+presympt_rf_fit_2_auc <- roc_auc(presympt_final_rf_fit_2$.predictions[[1]], Category, .pred_Control)
+rf_validation_roc <- roc_curve(rf_val_predictions_2, Category, .pred_Control)
+rf_validation_auc <- roc_auc(rf_val_predictions_2, Category, .pred_Control)
+
+rf_val_sens <- sensitivity(rf_val_predictions_2, Category, Prediction, event_level = "second")
+rf_val_spec <- specificity(rf_val_predictions_2, Category, Prediction, event_level = "second")
+
+ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
+    geom_path(data = rf_validation_roc, color = color_palette[3], size = 1.5) +
+    geom_path(data = presympt_rf_fit_2_roc, color = color_palette[1], size = 1.5)+
+    #geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
+    geom_abline(lty = 3) +
+    #geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
+    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(rf_validation_auc$.estimate, 4), "\nSENS:", round(rf_val_sens$.estimate, 2), "\nSPEC:", round(rf_val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
+    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_rf_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
+    coord_equal() +
+    theme_classic() 
 
 ```
 

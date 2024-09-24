@@ -313,7 +313,7 @@ dmr_presympt_limma <- train_limma(clusters_presympt, dmr_design_presympt)
 
 #Symptomatic DMRs
 
-dmr_design_sympt <- model.matrix(~Category + Batch + Sex, sympt_annotation)
+dmr_design_sympt <- model.matrix(~Category + Batch + Sex, sympt_annotaétion)
 dmr_sympt_limma <- train_limma(clusters_sympt, dmr_design_sympt)
 dmrs_sympt_limma<- dmr_sympt_limma$CategoryPE %>% filter(abs(logFC) > 0.1) %>% filter(adj.P.Val < 0.01) %>% rownames()
 ```
