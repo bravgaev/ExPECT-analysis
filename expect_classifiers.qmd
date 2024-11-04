@@ -12,14 +12,11 @@ message: false
 toc: true
 toc-expand: 2
 toc-location: left
-
-
 ---
 
 # Introduction
 
-This notebook contains the code for the creation of the machine learning classifiers of the ExPECT study. The code is kept separate mainly for readability and to keep the code in check. 
-
+This notebook contains the code for the creation of the machine learning classifiers of the ExPECT study. The code is kept separate mainly for readability and to keep the code in check.
 
 ```{r}
 #| label: "libs_and_utils"
@@ -116,18 +113,17 @@ sensPE <- metric_tweak("sensPE", sensitivity, event_level = "second")
 specPE <- metric_tweak("specPE", specificity, event_level = "second")
 cls_metrics <- metric_set(sensPE, specPE, accuracy)
 
-``` 
+```
 
-# Data loading and prepping 
+# Data loading and prepping
 
 Data is loaded in the same manner as for the exploratory analysis. However this time, additional splits are made. The symptomatic and pre-symptomatic data sets are divided into a training and test set (each containing an equal proportion of cases and control samples). The training set is used for DMR identification and model training while the test sets are used for model validation.
-
 
 ```{r}
 #| label: data_loading 
 setwd("~/Drive/ExPECT paper Symptomatic analysis/Code/Git_repo")
 #Load bsseq object
-bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/")
+bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/Total")
 
 #Load study annotation
 annotation <-  read_csv("Data/expect_annotation.csv")
@@ -136,21 +132,21 @@ long_samples <- read_table("Data/longitudinal_samples.txt")
 #Split up annotations for ease of use
 
 long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)
-presympt_annotation <- annotation %>% filter(Group == "Pre-symptomatic")
+presympt_annotation <- annotation %>% filter(Gest_age_weeks < 14)
 sympt_annotation <- annotation %>% filter(Group == "Symptomatic") %>% 
                                 filter(Sample_id %nin% long_annotation$Sample_id)
 ```
 
 The presymptomatic set is first divided after which DMR's are recalculated using `DMRfinder` on the samples included in the training set alone. A set of 25 DMR's is then selected for further modelling to limit overfitting of the models. However, because our cohort is fairly limited, some overfitting is impossible to prevent.
 
-
 ```{r}
 #| label: prep_presympt
 #| output: false
 
 #Prepare a dataset containing symptomatic samples
-
-bs_presympt <- bs_expect[,presympt_annotation$Sample_id]
+sample_select <- presympt_annotation$Sample_id[presympt_annotation$Sample_id %in% rownames(pData(bs_expect))]
+presympt_annotation  <-  filter(presympt_annotation, Sample_id %in% sample_select)
+bs_presympt <- bs_expect[,sample_select]
 
 pData(bs_presympt) <- pData(bs_presympt) %>% as_tibble(rownames = NA) %>% 
     rownames_to_column(var = "Sample_id") %>% 
@@ -185,7 +181,7 @@ dmr_presympt_finder_train <- dmrFinder(presympt_t_stat, qcutoff = c(0.01, 0.99))
 dmr_presympt_finder_train_filtered <- subset(dmr_presympt_finder_train, n >= 3 & abs(meanDiff) >= 0.1)
 
 #Get methylation values for the testing an training set
-model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+model_meth_presympt <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:50,]) %>% 
     t(.) %>%
     as_tibble(.) %>% 
     bind_cols(dplyr::select(presympt_annotation, Category, Sample_id)) %>%  
@@ -204,7 +200,7 @@ presympt_loo_folds <- vfold_cv(presympt_train_data, v = nrow(presympt_train_data
 #Prepare a dataset of the pre-symptomatic samples to use for the symptomatic model
 bs_sympt <- bs_expect[,sympt_annotation$Sample_id]
 
-test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
+test_set_sympt <- getMeth(bs_sympt, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:50,]) %>% 
   t(.) %>%
   as_tibble(.) %>% 
   bind_cols(dplyr::select(sympt_annotation, Category)) %>%  
@@ -277,11 +273,9 @@ In the following section the terms "Diagnostic" and "Predictive" model are used 
 
 ## Random forest classifiers
 
-A random forest classifier from the `ranger` package is built. Hyperparameter training is first performed on the number of trees, number of randomly selected predictors and the minimal node size.
-More info on random forest classifiers can be found on [Wikipedia](https://en.wikipedia.org/wiki/Random_forest).
+A random forest classifier from the `ranger` package is built. Hyperparameter training is first performed on the number of trees, number of randomly selected predictors and the minimal node size. More info on random forest classifiers can be found on [Wikipedia](https://en.wikipedia.org/wiki/Random_forest).
 
 ::: panel-tabset
-
 ### Diagnostic model
 
 ```{r}
@@ -338,7 +332,6 @@ plot_roc(sympt_final_rf_fit$.predictions[[1]], "Category", ".pred_Control",
 
 The best performing random forest model has the following parameters `r kable(select(sympt_best_rf, -.config))`
 
-
 ### Predictive model
 
 ```{r}
@@ -387,11 +380,9 @@ The best performing random forest model has the following parameters `r kable(se
 
 ## Support vector machine
 
-For the support vector machine, the `kernlab`-package is used set to classification mode. The only hyperparameter that is tuned is the __cost__ parameter.
-More info on support vector machines can be read [here](https://en.wikipedia.org/wiki/Support_vector_machine)
+For the support vector machine, the `kernlab`-package is used set to classification mode. The only hyperparameter that is tuned is the **cost** parameter. More info on support vector machines can be read [here](https://en.wikipedia.org/wiki/Support_vector_machine)
 
 ::: panel-tabset
-
 ### Diagnostic model
 
 ```{r}
@@ -480,16 +471,13 @@ plot_roc(presympt_final_svm_fit$.predictions[[1]], "Category", ".pred_Control",
 ```
 
 The best performing support vector machine has the following parameters `r kable(select(presympt_best_svm, -.config))`
-
 :::
 
 ## Regression model
 
-A logistic regression model is created with an elastic regularisation. The model family is set to binomial and the `glmnet` package is used for modelling. Both the model penalty and regularisation mixture are tuned during hyperparameter tuning.
-More about regression [here](https://en.wikipedia.org/wiki/Logistic_regression)
+A logistic regression model is created with an elastic regularisation. The model family is set to binomial and the `glmnet` package is used for modelling. Both the model penalty and regularisation mixture are tuned during hyperparameter tuning. More about regression [here](https://en.wikipedia.org/wiki/Logistic_regression)
 
 ::: panel-tabset
-
 ### Diagnostic model
 
 ```{r}
@@ -607,7 +595,6 @@ total_metrics <- tibble(Model = c("Random forest", "Random forest", "Support Vec
 kable(total_metrics)
 ```
 
-
 ```{r}
 #| include: false
 #| label: fig-roc_paper
@@ -693,7 +680,7 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
 ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
     geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
     geom_path(data = roc_reg_presymp_train, color = color_palette[1], size = 1.5)+
-    geom_abline(lty = 3) +
+    geom_abline(lty = 3) + 
     geom_text(aes(x = 0.75, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
     geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(auc_reg_presymp_train$.estimate, 4))), color = color_palette[1], size = 4) +
     coord_equal() +
@@ -701,199 +688,3 @@ ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
 ggsave(filename = "Plots/ROC_plots.png", width = 12, height = 7, bg = "transparent")
 
 ```
-
-
-```{r}
-#| label: "Regression model validation"
-
-#Load in the validation set 
-val_set <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/Validation_set/")
-
-#Get dataframe for model classification
-val_set_meth <- getMeth(val_set, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:25,]) %>% 
-    t(.) %>%
-    as_tibble(.) %>% 
-    replace_na(list(V16 = 0.5, V20=0.5))
-#Two DMRs seem to be missing, try filling these in
-val_predictions <- predict(presympt_reg_fit, val_set_meth, type="prob") %>% 
-    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
-    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
-
-#Different approach, use other DMRs to retrain model
-val_set_meth_2 <- getMeth(val_set, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_train_filtered[1:27,])  %>% 
-    t(.) %>%
-    as_tibble(.) %>% 
-    select(-c(V16,V20))
-
-#Retrain model based on new DMR set
-presympt_training_data_2 <- getMeth(bs_presympt_filtered, what = "perRegion", type = "smooth", regions = dmr_presympt_finder_train_filtered[1:27,]) %>% 
-    t(.) %>%
-    as_tibble(.) %>% 
-    select(-c(V16,V20)) %>% 
-    bind_cols(dplyr::select(presympt_annotation, Category, Sample_id)) %>%  
-    mutate(Category = as.factor(Category)) %>% 
-    relocate(Category) %>% 
-    column_to_rownames("Sample_id")
-
-presympt_data_split_2 <- initial_split(presympt_training_data_2, strata = Category)
-presympt_train_2 <- training(presympt_data_split_2)
-presympt_test_2 <- testing(presympt_data_split_2)
-
-presympt_folds_2 <- vfold_cv(presympt_train_2, v = 5, strata = Category)
-
-sampling_rec_presympt_2 <-  recipe(Category ~ ., data=presympt_train_2) %>% step_rose(Category)
-
-reg_wf_presympt_2 <- workflow() %>%
-    add_model(reg_mod) %>%
-    add_recipe(sampling_rec_presympt_2)
-
-presympt_reg_tune_2 <- reg_wf_presympt_2 %>%
-  tune_grid(resamples = presympt_folds_2, grid = reg_grid, metrics = cls_metrics)
-
-presympt_best_reg_2 <- presympt_reg_tune_2 %>%
-  select_best(metric = "accuracy")
-
-presympt_final_reg_wf_2 <- reg_wf_presympt_2 %>%
-  finalize_workflow(presympt_best_reg_2)
-
-presympt_final_reg_fit_2 <- presympt_final_reg_wf_2 %>% last_fit(presympt_data_split_2)
-presympt_reg_fit_2 <- presympt_final_reg_wf_2 %>% fit(presympt_training_data_2)
-
-val_predictions_2<- predict(presympt_reg_fit_2, val_set_meth_2, type="prob") %>% 
-    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
-    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
-
-#Load annotation and make roc curves
-
-validation_annot <- read_xlsx("Data/validation_annotation.xlsx", sheet=3)
-val_predictions_2 <- val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
-
-
-presympt_ref_fit_2_roc <- roc_curve(presympt_final_reg_fit_2$.predictions[[1]], Category, .pred_Control)
-presympt_ref_fit_2_auc <- roc_auc(presympt_final_reg_fit_2$.predictions[[1]], Category, .pred_Control)
-validation_roc <- roc_curve(val_predictions_2, Category, .pred_Control)
-validation_auc <- roc_auc(val_predictions_2, Category, .pred_Control)
-
-val_sens <- sensitivity(val_predictions_2, Category, Prediction, event_level = "second")
-val_spec <- specificity(val_predictions_2, Category, Prediction, event_level = "second")
-
-ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
-    geom_path(data = validation_roc, color = color_palette[3], size = 1.5) +
-    geom_path(data = presympt_ref_fit_2_roc, color = color_palette[1], size = 1.5)+
-    geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
-    geom_abline(lty = 3) +
-    geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
-    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(validation_auc$.estimate, 4), "\nSENS:", round(val_sens$.estimate, 2), "\nSPEC:", round(val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
-    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_ref_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
-    coord_equal() +
-    theme_classic() 
-
-```
-
-```{r}
-#Repeat the validation for both the random forest and SVM model
-
-svm_wf_presympt_2 <- workflow() %>% 
-  add_model(svm_mod) %>% 
-  add_recipe(sampling_rec_presympt_2)
-
-#Fit the resamples and do a grid search for symptomatic samples
-svm_tune_2 <- svm_wf_presympt_2 %>% 
-  tune_grid(resamples = presympt_folds_2, grid = svm_grid, metrics =  cls_metrics)
-
-presympt_best_svm_2 <- svm_tune_2 %>% 
-  select_best(metric = "accuracy")
-
-presympt_final_svm_wf_2 <- svm_wf_presympt_2 %>% 
-  finalize_workflow(presympt_best_svm_2)
-
-presympt_svm_resample_fit_2 <- fit_resamples(presympt_final_svm_wf_2, resamples = presympt_folds_2, metrics = cls_metrics)
-
-presympt_final_svm_fit_2 <- presympt_final_svm_wf_2 %>% 
-  last_fit(presympt_data_split_2)
-
-presympt_svm_fit_2 <- presympt_final_svm_wf_2 %>% fit(presympt_training_data_2)
-
-svm_val_predictions_2<- predict(presympt_svm_fit_2, val_set_meth_2, type="prob") %>% 
-    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
-    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
-
-svm_val_predictions_2 <- svm_val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
-
-
-presympt_svm_fit_2_roc <- roc_curve(presympt_final_svm_fit_2$.predictions[[1]], Category, .pred_Control)
-presympt_svm_fit_2_auc <- roc_auc(presympt_final_svm_fit_2$.predictions[[1]], Category, .pred_Control)
-svm_validation_roc <- roc_curve(svm_val_predictions_2, Category, .pred_Control)
-svm_validation_auc <- roc_auc(svm_val_predictions_2, Category, .pred_Control)
-
-svm_val_sens <- sensitivity(svm_val_predictions_2, Category, Prediction, event_level = "second")
-svm_val_spec <- specificity(svm_val_predictions_2, Category, Prediction, event_level = "second")
-
-ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
-    geom_path(data = svm_validation_roc, color = color_palette[3], size = 1.5) +
-    geom_path(data = presympt_svm_fit_2_roc, color = color_palette[1], size = 1.5)+
-    #geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
-    geom_abline(lty = 3) +
-    #geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
-    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(svm_validation_auc$.estimate, 4), "\nSENS:", round(svm_val_sens$.estimate, 2), "\nSPEC:", round(svm_val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
-    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_svm_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
-    coord_equal() +
-    theme_classic() 
-```
-```{r}
-#Validate RF model
-
-rf_wf_presympt_2 <- workflow() %>% 
-  add_model(rf_mod) %>% 
-  add_recipe(sampling_rec_presympt_2) 
-
-#fit the pre symptomatic resamplings
-presympt_rf_tune_2 <- rf_wf_presympt_2 %>% 
-  tune_grid(resamples = presympt_folds_2, grid = rf_grid)
-
-#get the best model
-presympt_best_rf_2 <- presympt_rf_tune_2 %>% 
-  select_best(metric = "accuracy")
-
-#make the final fit and evaluate the test set
-presympt_final_rf_wf_2 <- rf_wf_presympt_2 %>% 
-  finalize_workflow(presympt_best_rf_2)
-
-presympt_rf_resample_fit_2 <- fit_resamples(presympt_final_rf_wf_2, resamples = presympt_folds_2, metrics = cls_metrics)
-
-presympt_final_rf_fit_2 <- presympt_final_rf_wf_2 %>% 
-  last_fit(presympt_data_split_2)
-
-#Test the model on the symptomatic data
-
-presympt_rf_fit_2 <- presympt_final_rf_wf_2 %>% fit(presympt_training_data_2)
-
-
-rf_val_predictions_2<- predict(presympt_rf_fit_2, val_set_meth_2, type="prob") %>% 
-    bind_cols(Sample_id = rownames(pData(val_set))) %>% 
-    mutate(Prediction = ifelse(.pred_PE > .pred_Control, "PE", "Control"))
-
-rf_val_predictions_2 <- rf_val_predictions_2 %>% left_join(select(validation_annot, Sample_id, Category)) %>% mutate(Category= as.factor(Category)) %>% mutate(Prediction= as.factor(Prediction))
-
-
-presympt_rf_fit_2_roc <- roc_curve(presympt_final_rf_fit_2$.predictions[[1]], Category, .pred_Control)
-presympt_rf_fit_2_auc <- roc_auc(presympt_final_rf_fit_2$.predictions[[1]], Category, .pred_Control)
-rf_validation_roc <- roc_curve(rf_val_predictions_2, Category, .pred_Control)
-rf_validation_auc <- roc_auc(rf_val_predictions_2, Category, .pred_Control)
-
-rf_val_sens <- sensitivity(rf_val_predictions_2, Category, Prediction, event_level = "second")
-rf_val_spec <- specificity(rf_val_predictions_2, Category, Prediction, event_level = "second")
-
-ggplot(mapping = aes(x = 1 - specificity, y = sensitivity)) +
-    geom_path(data = rf_validation_roc, color = color_palette[3], size = 1.5) +
-    geom_path(data = presympt_rf_fit_2_roc, color = color_palette[1], size = 1.5)+
-    #geom_path(data = roc_reg_presymp_pred, color = color_palette[2], size = 1.5) +
-    geom_abline(lty = 3) +
-    #geom_text(aes(x = 0.60, y = 0.40, label = paste0("AUC:", round(auc_reg_presymp_pred$.estimate, 4))), color = color_palette[2], size = 4) +
-    geom_text(aes(x = 0.90, y = 0.60, label = paste0("AUC:", round(rf_validation_auc$.estimate, 4), "\nSENS:", round(rf_val_sens$.estimate, 2), "\nSPEC:", round(rf_val_spec$.estimate, 2))), color = color_palette[3], size = 4) +
-    geom_text(aes(x = 0.20, y = 1, label = paste0("AUC:", round(presympt_rf_fit_2_auc$.estimate, 4))), color = color_palette[1], size = 4) +
-    coord_equal() +
-    theme_classic() 
-
-```
-
