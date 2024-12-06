@@ -48,6 +48,7 @@ library(DSS)
 library(ggpubr)
 library(annotatr)
 library(tidyverse)
+library(compareGroups)
 
 
 #Plotting colors
@@ -143,26 +144,32 @@ A `bsseq` object and `.Rds` file containing normalized and clustered methylation
 
 
 #Load bsseq object
-bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation")
+bs_expect <- loadHDF5SummarizedExperiment(dir = "Data/Methylation/Total")
 
 #Load clustered methylation data
-clusters_expect <- readRDS("Data/Methylation/clusters_expect.Rds")
+clusters_expect <- readRDS("Data/Methylation/Total/cluster_expect.Rds")
 
 #Load study annotation
 annotation <-  read_csv("Data/expect_annotation.csv") %>% mutate(Group = ifelse(Group == "Pre-symptomatic", "Presymptomatic", "Symptomatic"))
 long_samples <- read_table("Data/longitudinal_samples.txt")
 
-
 #Split up annotations for ease of use
 
-long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)
-presympt_annotation <- annotation %>% filter(Group == "Presymptomatic") 
-sympt_annotation <- annotation %>% filter(Group == "Symptomatic") %>% 
+long_annotation <- annotation %>% filter(Sample_id %in% long_samples$Sample_id)  %>% mutate(Group="longitudinal")
+presympt_annotation <- annotation %>% filter(Gest_age_weeks < 14) 
+sympt_annotation <- annotation %>% filter(Gest_age_weeks >= 20) %>% 
                                 filter(Sample_id %nin% long_annotation$Sample_id)
+filtered_annotation  <- annotation  %>% filter(Gest_age_weeks < 14 | Gest_age_weeks >= 20)
+
 
 #Split up clusters for ease of use
-clusters_presympt <- clusters_expect %>% select(all_of(presympt_annotation$Sample_id))
-clusters_sympt <- clusters_expect %>%  select(all_of(sympt_annotation$Sample_id))
+sample_select <- presympt_annotation$Sample_id[presympt_annotation$Sample_id %in% rownames(pData(bs_expect))]
+presympt_annotation <- presympt_annotation  %>% filter(Sample_id %in% sample_select) %>% mutate(Group="Presymptomatic")
+clusters_presympt <- clusters_expect %>% select(all_of(sample_select))
+sample_select <- sympt_annotation$Sample_id[sympt_annotation$Sample_id %in% rownames(pData(bs_expect))]
+sympt_annotation <- sympt_annotation  %>% filter(Sample_id %in% sample_select) %>% mutate(Group="Symptomatic")
+clusters_sympt <- clusters_expect %>%  select(all_of(sample_select))
+
 
 kable(annotation) %>% 
     kable_paper("hover") %>% 
@@ -215,6 +222,8 @@ cohort_overlap <- list("Symptomatic" = sympt_annotation$Patient[!duplicated(symp
 
 ggvenn::ggvenn(cohort_overlap, fill_color = color_palette)
 overlapping_patients <- intersect(sympt_annotation$Patient[!duplicated(sympt_annotation$Patient)],presympt_annotation$Patient[!duplicated(presympt_annotation$Patient)])
+
+
 ```
 
 Dimensionality reduction is performed on the methylation values of the clusters to gain an overview of the samples and spot potential outliers.
@@ -294,6 +303,33 @@ ggplot(mean_meth_combined, aes(Category, value)) +
 ```
 Box-plots showing the mean genomic methylation level of controls and preeclampsia cases (PE). Methylation levels from presymptomatic samples, sampled between 11 and 20 weeks of gestation, show no significant difference. Methylation levels between cases and controls sampled after 20 weeks of gestation show a significantly lower methylation level of cases compared to controls. Significant methylation differences between pre-symptomatic and symptomatic groups  can be observed for both preeclampsia cases and controls.
 
+```{r}
+#Calculate statistics on groups
+filter(presympt_annotation, Category == "PE")  %>% summarise(mean(Gest_age_weeks))
+filter(presympt_annotation, Category == "Control")  %>% summarise(mean(Gest_age_weeks))
+
+filter(sympt_annotation, Category == "PE")  %>% summarise(mean(Gest_age_weeks))
+filter(sympt_annotation, Category == "Control")  %>% summarise(mean(Gest_age_weeks))
+
+total_study  <- bind_rows(sympt_annotation, presympt_annotation) %>%
+    bind_rows(long_annotation) %>% 
+    distinct()
+
+total_patients  <- total_study  %>% distinct(Patient, .keep_all = T)   
+
+total_patients  %>% group_by(Category)  %>% 
+    summarise(across(all_of(c("Gest_age_birth", "Gravida", "BMI")), list(mean = mean, sd = sd), na.rm = T))
+
+total_patients  %>% group_by(Category, Race)  %>% 
+ summarise(n= n())
+
+compare_input  <- total_patients %>% select(Gest_age_weeks, Category, Gravida, Fertility_treatment, BMI,Birth_term_category, Sex, Gest_age_birth)
+
+compareGroups(Category ~ ., data=compare_input)
+
+
+```
+
 # DMR calculation
 
 To define the methylation difference between PE and control samples DMR's are calculated in two ways. In the first method the *ad hoc* defined CpG clusters are used and a *limma* model is generated to calculate clusters that are DMR's. Clustering based on these DMR's can be seen below, use the tabs to select the number of DMR's used for clustering. As seen in the  the largest difference can be observed between early pre-symptomatic samples and later symptomatic samples, therefore these two groups are also used separately for DMR calculation. DMR calculation on the entire dataset does not yield any significant DMR's between PE and control groups.
@@ -301,19 +337,20 @@ To define the methylation difference between PE and control samples DMR's are ca
 ```{r}
 #| label: limma_dmrs
 #DMR calculation with limma
-dmr_design <- model.matrix(~Category + Batch + Sex, annotation)
-dmr_clusters_limma <- train_limma(clusters_expect, dmr_design) #This function is defined in the first code block 
+##dmr_design <- model.matrix(~Category + Batch + Sex + Gest_age_weeks, annotation)
+##dmr_clusters_limma <- train_limma(clusters_expect, dmr_design) #This function is defined in the first code block 
 #DMR calculation on the entire set does not yield any significant DMR's
 
 #Pre-symptomatic DMRs
 
-dmr_design_presympt <- model.matrix(~Category + Batch + Sex, presympt_annotation)
+dmr_design_presympt <- model.matrix(~Category + Batch + Sex + Gest_age_weeks, presympt_annotation)
 dmr_presympt_limma <- train_limma(clusters_presympt, dmr_design_presympt)
+dmrs_presympt_limma<- dmr_presympt_limma$CategoryPE %>% filter(abs(logFC) > 0.1) %>% filter(adj.P.Val < 0.01) %>% rownames()
 #DMR calculation on the presymptomatic set does not yield many significant DMR's
 
 #Symptomatic DMRs
 
-dmr_design_sympt <- model.matrix(~Category + Batch + Sex, sympt_annotaétion)
+dmr_design_sympt <- model.matrix(~Category + Batch + Sex+ Gest_age_weeks, sympt_annotation)
 dmr_sympt_limma <- train_limma(clusters_sympt, dmr_design_sympt)
 dmrs_sympt_limma<- dmr_sympt_limma$CategoryPE %>% filter(abs(logFC) > 0.1) %>% filter(adj.P.Val < 0.01) %>% rownames()
 ```
@@ -325,7 +362,7 @@ Heatmap plots are made to show the significance of the discovered DMR's, switch 
 ::: panel-tabset
 
 ```{r}
-#| label: annot_heatmap_sympt
+#| label: annot_heatmap
 sympt_heatmap_annot <- sympt_annotation %>% column_to_rownames(var = "Sample_id") %>% 
     dplyr::select(Category, Sex, Aspirin) %>% 
     mutate(across(Category:Aspirin, as.factor))
@@ -342,7 +379,7 @@ p_dmr500_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:5
 
 ```{r}
 #| label: fig-heatmap_sympt250
-p_dmr250_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:250,]), sympt_heatmap_annot, file = "Plots/sympt250_heatmap.png", height = 5)
+p_dmr250_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:250,]), sympt_heatmap_annot)
 ```
 
 #### Top 100
@@ -353,74 +390,20 @@ p_dmr100_cluster_heatmap <- meth_heatmap(t(clusters_sympt[dmrs_sympt_limma,][1:1
 ```
 :::
 
-## Pre-symptomatic DMR's
+### Presymptomatic clustering
 
-As finding significant DMR's in the pre-symptomatic cohort proved unsuccesfull with the _ad hoc_ clustering method, a second approach using `DMRfinder` is tried. This approach yields a set of significant DMR's for the early sampling period.
- 
+Heatmap plots are made to show the significance of the discovered DMR's, switch between the amount of DMR's used to generate the heatmap by using the tabset. The rows of the heatmaps represent samples, while columns represent the DMR's. Methylation values are shown on a gradient from blue to white to purple (with blue hues being <50% methylated regions and purple hues meaning >50% methylated regions)
+
 ```{r}
-#| label: dmrfinder
-#| output: false
-
-#Prepare presymtomatic methylation data, filter out low coverage sites
-bs_presympt <- bs_expect[,presympt_annotation$Sample_id]
-
-pData(bs_presympt) <- pData(bs_presympt) %>% as_tibble(rownames = NA) %>% 
-    rownames_to_column(var = "Sample_id") %>% 
-    left_join(presympt_annotation)
-rownames(pData(bs_presympt)) <- bs_presympt$Sample_id
-
-
-cov_presympt <- getCoverage(bs_presympt, type = "Cov", what = "perBase")
-keep <- which(rowSums(cov_presympt[,bs_presympt$Category == "Control"] >= 2) >= 2 &
-                rowSums(cov_presympt[,bs_presympt$Category == "PE"] >= 2) >= 2)
-bs_presympt_filtered <- bs_presympt[keep,]
-
-pe_ids <- rownames(pData(bs_presympt_filtered)[bs_presympt_filtered$Category == "PE",])
-control_ids <- rownames(pData(bs_presympt_filtered)[bs_presympt_filtered$Category == "Control",])
-
-presympt_t_stat <- BSmooth.tstat(bs_presympt_filtered, 
-                                 group1 = pe_ids,
-                                 group2 = control_ids,
-                                 estimate.var = "group2",
-                                 local.correct = T,
-                                 verbose = T)
-dmr_presympt_finder <- dmrFinder(presympt_t_stat, qcutoff = c(0.01, 0.99))
-dmr_presympt_finder_filtered <- subset(dmr_presympt_finder, n >= 3 & abs(meanDiff) >= 0.1)
+#| label: fig-heatmap_presympt
 
 presympt_heatmap_annot  <- presympt_annotation %>% column_to_rownames(var = "Sample_id") %>% 
     dplyr::select(Category, Sex, Aspirin) %>% 
     mutate(across(Category:Aspirin, as.factor))
 
-heatmap_data_finder <- getMeth(bs_presympt_filtered, type = "smooth", what = "perRegion", regions = dmr_presympt_finder_filtered)
-colnames(heatmap_data_finder) <- pData(bs_presympt_filtered)$Sample_id
+p_dmr_cluster_heatmap_pre <- meth_heatmap(t(clusters_presympt[dmrs_presympt_limma,]), presympt_heatmap_annot, height = 5)
 ```
 
-### Clustering
-
-Heatmap plots are made to show the significance of the discovered DMR's, switch between the amount of DMR's used to generate the heatmap by using the tabset. The rows of the heatmaps represent samples, while columns represent the DMR's. Methylation values are shown on a gradient from blue to white to purple (with blue hues being <50% methylated regions and purple hues meaning >50% methylated regions)
-
-::: panel-tabset
-#### Top 500
-
-```{r}
-#| label: fig-heatmap_presympt500
-p_dmrfinder500_heatmap <- meth_heatmap(t(heatmap_data_finder[1:500,]), presympt_heatmap_annot)
-```
-
-#### Top 250
-
-```{r}
-#| label: fig-heatmap_presympt250
-p_dmrfinder250_heatmap <- meth_heatmap(t(heatmap_data_finder[1:250,]), presympt_heatmap_annot,file = "Plots/presympt250_heatmap.png", height = 5)
-```
-
-#### Top 100
-
-```{r}
-#| label: fig-heatmap_presympt100
-p_dmrfinder100_heatmap <- meth_heatmap(t(heatmap_data_finder[1:100,]), presympt_heatmap_annot)
-```
-:::
 
 ## Overlap
 
@@ -431,7 +414,7 @@ DMR's are compared between the pre-symptomatic and symptomatic cohort. But only 
 #| fig-cap: "Only limited overlap is present in DMR's between early and late samples"
 
 
-presympt_dmr_ranges <- GRanges(seqnames = dmr_presympt_finder_filtered$chr, range = IRanges(start = dmr_presympt_finder_filtered$start, end = dmr_presympt_finder_filtered$end))
+presympt_dmr_ranges <- id2ranges(dmrs_presympt_limma)
 sympt_dmr_ranges <- id2ranges(dmrs_sympt_limma)
 
 overlap_dmrs <- subsetByOverlaps(presympt_dmr_ranges, sympt_dmr_ranges)
@@ -448,14 +431,15 @@ To explore enriched GO terms the `goana` package is used to perform a gene ontol
 #| column: body-outset
 #| tbl-cap: "Top GO terms in the overlapping DMR's"
 
-mart <- useEnsembl("ensembl", mirror = "useast")
+mart <- useEnsembl("ensembl")
 mart <- useDataset("hsapiens_gene_ensembl", mart)
 attributes <- c("ensembl_gene_id","hgnc_symbol", "description", "chromosome_name", "start_position", "end_position", "strand", "entrezgene_id")
 filters <- c("chromosomal_region")
 
-dmr_presympt_finder_filtered <- dmr_presympt_finder_filtered %>% 
-    mutate(chromosomal_region=paste0(chr,":",start, ":", end))
-
+dmr_presympt_finder_filtered <- dmr_presympt_limma$CategoryPE %>% filter(abs(logFC) > 0.1) %>% 
+    rownames_to_column(var = "chromosomal_region") %>% 
+    mutate(chromosomal_region = str_replace(chromosomal_region, "-", ":")) %>% 
+    separate(chromosomal_region, into = c("chromosome_name", "start_position", "end_position"), sep = ":", convert = T, remove = F)
 dmr_sympt_limma$CategoryPE <- dmr_sympt_limma$CategoryPE %>% filter(abs(logFC) > 0.1) %>% 
     rownames_to_column(var = "chromosomal_region") %>% 
     mutate(chromosomal_region = str_replace(chromosomal_region, "-", ":")) %>% 
@@ -516,6 +500,51 @@ genes_clusters <- getBM(attributes = attributes, filters = filters, values = clu
 clusters_expect_annotated <-  fuzzy_left_join(genes_clusters[genes_clusters$hgnc_symbol %in% GOI,], clusters_annotated, 
                                         by = c("chromosome_name", "start_position", "end_position"), 
                                         match_fun=list(`==`, `<=`, `>=`))
+
+#Look at genes in different groups
+PIGF_meth  <-  clusters_expect_annotated  %>% filter(hgnc_symbol=="PIGF") %>%
+    select(contains("DNA"))  %>%
+    t(.)  %>%
+    as_tibble(rownames=NA) %>%
+    rownames_to_column(var="Sample_id")  %>% 
+    rowwise()  %>% 
+    mutate(Methylation = mean(c(V1, V2, V3)))  %>% 
+    ungroup()  %>% 
+    right_join(annotation) %>% 
+    mutate(Category = paste(Group, Category))
+
+ggplot(PIGF_meth, aes(Category, Methylation)) +
+    geom_boxplot() +
+    geom_beeswarm(aes(color = Category), stroke = 1, shape = 1) +
+    stat_compare_means(comparisons = list(c("Presymptomatic Control", "Presymptomatic PE"),c("Symptomatic Control", "Symptomatic PE"),c("Presymptomatic Control", "Symptomatic Control"), c("Presymptomatic PE", "Symptomatic PE")),method ="wilcox.test", p.adjust.methods = "BH", label = "p.signif")+
+    scale_color_manual(values = color_palette) + 
+    ylab("Mean PIGF methylation level") +
+    xlab("")+
+    guides(color = F)+
+    theme_classic()
+
+
+FLT1_meth  <-  clusters_expect_annotated  %>% filter(hgnc_symbol=="FLT1") %>%
+    select(contains("DNA"))  %>%
+    t(.)  %>%
+    as_tibble(rownames=NA) %>%
+    rownames_to_column(var="Sample_id")  %>% 
+    rowwise()  %>% 
+    mutate(Methylation = mean(c_across(c(starts_with("V")))))  %>% 
+    ungroup()  %>% 
+    right_join(annotation) %>% 
+    mutate(Category = paste(Group, Category))
+
+
+ggplot(FLT1_meth, aes(Category, Methylation)) +
+    geom_boxplot() +
+    geom_beeswarm(aes(color = Category), stroke = 1, shape = 1) +
+    stat_compare_means(comparisons = list(c("Presymptomatic Control", "Presymptomatic PE"),c("Symptomatic Control", "Symptomatic PE"),c("Presymptomatic Control", "Symptomatic Control"), c("Presymptomatic PE", "Symptomatic PE")),method ="wilcox.test", p.adjust.methods = "BH", label = "p.signif")+
+    scale_color_manual(values = color_palette) + 
+    ylab("Mean FLT1 methylation level") +
+    xlab("")+
+    guides(color = F)+
+    theme_classic()
 ```
 
 
